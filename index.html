@@ -425,6 +425,16 @@
   }
   .total-balance-strip .tb-value.good { color: var(--good); }
   .total-balance-strip .tb-value.critical { color: var(--critical); }
+  .ledger-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3em;
+    font-size: 0.8rem;
+    color: var(--accent);
+    text-decoration: none;
+    margin-top: 0.6rem;
+  }
+  .ledger-link:hover { text-decoration: underline; }
   .meters { display: flex; flex-direction: column; gap: 0.85rem; }
   .meter-row {
     display: grid;
@@ -511,17 +521,17 @@
         <div class="bt-sep">−</div>
         <div class="bt-item">
           <span class="bt-label">支出</span>
-          <span class="bt-value">¥75,701</span>
+          <span class="bt-value">¥76,301</span>
         </div>
         <div class="bt-sep">=</div>
         <div class="bt-item">
           <span class="bt-label">収支</span>
-          <span class="bt-value critical">¥-8,947</span>
+          <span class="bt-value critical">¥-9,547</span>
         </div>
       </div>
       <div class="total-balance-strip">
         <span>💰 総残高（全期間通算）</span>
-        <span class="tb-value good">¥65,694</span>
+        <span class="tb-value good">¥65,094</span>
       </div>
       <div class="meters">
       <div class="meter-row">
@@ -536,8 +546,8 @@
       </div>
       <div class="meter-row">
         <div class="meter-label">たばこ代</div>
-        <div class="meter-track "><div class="meter-fill" style="width: 54%"></div></div>
-        <div class="meter-value">¥5,400 / ¥10,000（<span class="pct">54%</span>）</div>
+        <div class="meter-track "><div class="meter-fill" style="width: 60%"></div></div>
+        <div class="meter-value">¥6,000 / ¥10,000（<span class="pct">60%</span>）</div>
       </div>
       <div class="meter-row">
         <div class="meter-label">交通費</div>
@@ -565,15 +575,8 @@
         <div class="meter-value">¥31,420（上限なし）</div>
       </div>
       </div>
+      <a class="ledger-link" href="https://docs.google.com/spreadsheets/d/1pLRxeYVbDp_vsEmWho6Mc5amp2nhrA9nazV4LDuWN0c/edit" target="_blank" rel="noopener">📊 家計簿を開く（Googleスプレッドシート）</a>
     </div>
-  </section>
-
-  <section class="warning-card">
-    <div class="kicker">未確認のカード利用（1件・合計¥600）</div>
-    <div class="pending-list">
-      <div class="pending-row"><span class="pending-merchant">セブン－イレブン</span><span class="pending-card">PayPayカード</span><span class="pending-amount">¥600</span></div>
-    </div>
-    <p>「メールのカード利用を記録して」と伝えると記録できます。</p>
   </section>
 
   <section>
@@ -655,7 +658,7 @@
   </section>
 
   <footer>
-    <span>2026-09-16 07:01 時点のスナップショット</span>
+    <span>2026-09-16 07:34 時点のスナップショット</span>
     <span>更新するには「ダッシュボード更新して」と伝えてください</span>
   </footer>
 
