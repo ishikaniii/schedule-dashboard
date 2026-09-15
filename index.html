@@ -209,6 +209,27 @@
   .warning-card.critical .kicker { color: var(--critical); }
   .warning-card p { margin: 0.25rem 0 0; font-size: 0.9rem; color: var(--ink); }
 
+  /* ---------- Pending card charges (email-tracker, 2026-09-15〜) ---------- */
+  .pending-list { display: flex; flex-direction: column; margin-top: 0.5rem; }
+  .pending-row {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    padding: 0.35rem 0;
+    border-bottom: 1px dashed var(--line);
+    font-size: 0.88rem;
+  }
+  .pending-row:last-child { border-bottom: none; }
+  .pending-merchant { color: var(--ink); flex: 1; }
+  .pending-card { color: var(--ink-faint); font-size: 0.78rem; white-space: nowrap; }
+  .pending-amount {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    color: var(--ink);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
   /* ---------- Timeline / agenda ---------- */
   .agenda { display: flex; flex-direction: column; }
   .agenda-day {
@@ -547,6 +568,15 @@
     </div>
   </section>
 
+  <section class="warning-card">
+    <div class="kicker">未確認のカード利用（2件・合計¥2,047）</div>
+    <div class="pending-list">
+      <div class="pending-row"><span class="pending-merchant">ラーメン我馬広店</span><span class="pending-card">PayPayカード</span><span class="pending-amount">¥1,447</span></div>
+      <div class="pending-row"><span class="pending-merchant">セブン－イレブン</span><span class="pending-card">PayPayカード</span><span class="pending-amount">¥600</span></div>
+    </div>
+    <p>「メールのカード利用を記録して」と伝えると記録できます。</p>
+  </section>
+
   <section>
     <h2 class="section-title">今後の予定</h2>
     <div class="agenda" style="background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 0.3rem 1.2rem; box-shadow: var(--shadow);">
@@ -619,7 +649,7 @@
   </section>
 
   <footer>
-    <span>2026-09-15 07:02 時点のスナップショット</span>
+    <span>2026-09-15 09:13 時点のスナップショット</span>
     <span>更新するには「ダッシュボード更新して」と伝えてください</span>
   </footer>
 
