@@ -189,6 +189,26 @@
     margin: 0 0 0.7rem;
   }
 
+  /* Collapsible section (2026-09-18〜) — plain <details>/<summary>, no JS
+     needed, so it works identically on the Artifact and GitHub Pages
+     copies of this page. */
+  summary.section-title {
+    cursor: pointer;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 0.4em;
+  }
+  summary.section-title::-webkit-details-marker { display: none; }
+  summary.section-title::before {
+    content: "▸";
+    display: inline-block;
+    color: var(--ink-faint);
+    font-size: 0.8em;
+    transition: transform 0.15s ease;
+  }
+  details[open] > summary.section-title::before { transform: rotate(90deg); }
+
   /* ---------- Warning cards ---------- */
   .warnings { display: flex; flex-direction: column; gap: 0.6rem; }
   .warning-card {
@@ -612,8 +632,8 @@
     </div>
   </section>
 
-  <section>
-    <h2 class="section-title">今月の支出（最新12件）</h2>
+  <details open>
+    <summary class="section-title">今月の支出（最新12件）</summary>
     <div class="expense-list" style="background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 0.3rem 1.2rem; box-shadow: var(--shadow);">
       <div class="expense-row"><span class="expense-date">09/24</span><span class="expense-category">交通費</span><span class="expense-memo">駐輪場</span><span class="expense-amount">¥100</span></div>
       <div class="expense-row"><span class="expense-date">09/23</span><span class="expense-category">交通費</span><span class="expense-memo">駐輪場</span><span class="expense-amount">¥100</span></div>
@@ -629,7 +649,7 @@
       <div class="expense-row"><span class="expense-date">09/15</span><span class="expense-category">たばこ代</span><span class="expense-memo">タバコ</span><span class="expense-amount">¥600</span></div>
     </div>
     <a class="ledger-link" href="https://docs.google.com/spreadsheets/d/1pLRxeYVbDp_vsEmWho6Mc5amp2nhrA9nazV4LDuWN0c/edit" target="_blank" rel="noopener">📊 すべて見る（Googleスプレッドシート）</a>
-  </section>
+  </details>
 
   <section>
     <h2 class="section-title">今後の予定</h2>
@@ -725,7 +745,7 @@
   </section>
 
   <footer>
-    <span>2026-09-18 08:43 時点のスナップショット</span>
+    <span>2026-09-18 08:50 時点のスナップショット</span>
     <span>更新するには「ダッシュボード更新して」と伝えてください</span>
   </footer>
 
