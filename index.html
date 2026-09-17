@@ -436,6 +436,29 @@
   }
   .ledger-link:hover { text-decoration: underline; }
   .meters { display: flex; flex-direction: column; gap: 0.85rem; }
+
+  /* ---------- Recent expenses (2026-09-18〜) ---------- */
+  .expense-row {
+    display: grid;
+    grid-template-columns: 3.2rem 4.2rem 1fr auto;
+    align-items: baseline;
+    gap: 0.7rem;
+    padding: 0.55rem 0;
+    border-bottom: 1px solid var(--line);
+    font-size: 0.85rem;
+  }
+  .expense-row:last-child { border-bottom: none; }
+  .expense-date { font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--ink-faint); }
+  .expense-category {
+    color: var(--accent-strong);
+    background: var(--accent-soft);
+    border-radius: 5px;
+    padding: 0.1rem 0.5rem;
+    font-size: 0.76rem;
+    width: fit-content;
+  }
+  .expense-memo { color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .expense-amount { font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--ink); font-weight: 600; white-space: nowrap; }
   .meter-row {
     display: grid;
     grid-template-columns: 5rem 1fr 11rem;
@@ -521,28 +544,28 @@
         <div class="bt-sep">−</div>
         <div class="bt-item">
           <span class="bt-label">支出</span>
-          <span class="bt-value">¥107,084</span>
+          <span class="bt-value">¥109,784</span>
         </div>
         <div class="bt-sep">=</div>
         <div class="bt-item">
           <span class="bt-label">収支</span>
-          <span class="bt-value critical">¥-25,870</span>
+          <span class="bt-value critical">¥-28,570</span>
         </div>
       </div>
       <div class="total-balance-strip">
         <span>💰 総残高（全期間通算）</span>
-        <span class="tb-value good">¥60,771</span>
+        <span class="tb-value good">¥58,071</span>
       </div>
       <div class="meters">
       <div class="meter-row">
         <div class="meter-label">日用品</div>
         <div class="meter-track state-critical"><div class="meter-fill" style="width: 100%"></div></div>
-        <div class="meter-value">¥30,086 / ¥2,000（<span class="pct">1504%</span>）</div>
+        <div class="meter-value">¥30,636 / ¥2,000（<span class="pct">1532%</span>）</div>
       </div>
       <div class="meter-row">
         <div class="meter-label">食費</div>
         <div class="meter-track state-critical"><div class="meter-fill" style="width: 100%"></div></div>
-        <div class="meter-value">¥8,011 / ¥5,000（<span class="pct">160%</span>）</div>
+        <div class="meter-value">¥10,161 / ¥5,000（<span class="pct">203%</span>）</div>
       </div>
       <div class="meter-row">
         <div class="meter-label">たばこ代</div>
@@ -587,6 +610,25 @@
       </div>
       <a class="ledger-link" href="https://docs.google.com/spreadsheets/d/1pLRxeYVbDp_vsEmWho6Mc5amp2nhrA9nazV4LDuWN0c/edit" target="_blank" rel="noopener">📊 家計簿を開く（Googleスプレッドシート）</a>
     </div>
+  </section>
+
+  <section>
+    <h2 class="section-title">今月の支出（最新12件）</h2>
+    <div class="expense-list" style="background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 0.3rem 1.2rem; box-shadow: var(--shadow);">
+      <div class="expense-row"><span class="expense-date">09/24</span><span class="expense-category">交通費</span><span class="expense-memo">駐輪場</span><span class="expense-amount">¥100</span></div>
+      <div class="expense-row"><span class="expense-date">09/23</span><span class="expense-category">交通費</span><span class="expense-memo">駐輪場</span><span class="expense-amount">¥100</span></div>
+      <div class="expense-row"><span class="expense-date">09/22</span><span class="expense-category">交通費</span><span class="expense-memo">駐輪場</span><span class="expense-amount">¥100</span></div>
+      <div class="expense-row"><span class="expense-date">09/17</span><span class="expense-category">食費</span><span class="expense-memo">コーヒー</span><span class="expense-amount">¥116</span></div>
+      <div class="expense-row"><span class="expense-date">09/17</span><span class="expense-category">たばこ代</span><span class="expense-memo">タバコ</span><span class="expense-amount">¥600</span></div>
+      <div class="expense-row"><span class="expense-date">09/17</span><span class="expense-category">食費</span><span class="expense-memo">フジ</span><span class="expense-amount">¥2,150</span></div>
+      <div class="expense-row"><span class="expense-date">09/17</span><span class="expense-category">日用品</span><span class="expense-memo">ダイソー</span><span class="expense-amount">¥550</span></div>
+      <div class="expense-row"><span class="expense-date">09/17</span><span class="expense-category">貯金</span><span class="expense-memo">貯蓄</span><span class="expense-amount">¥12,000</span></div>
+      <div class="expense-row"><span class="expense-date">09/15</span><span class="expense-category">食費</span><span class="expense-memo">たこ焼き</span><span class="expense-amount">¥280</span></div>
+      <div class="expense-row"><span class="expense-date">09/15</span><span class="expense-category">食費</span><span class="expense-memo">辛麺</span><span class="expense-amount">¥720</span></div>
+      <div class="expense-row"><span class="expense-date">09/15</span><span class="expense-category">食費</span><span class="expense-memo">コーヒー</span><span class="expense-amount">¥127</span></div>
+      <div class="expense-row"><span class="expense-date">09/15</span><span class="expense-category">たばこ代</span><span class="expense-memo">タバコ</span><span class="expense-amount">¥600</span></div>
+    </div>
+    <a class="ledger-link" href="https://docs.google.com/spreadsheets/d/1pLRxeYVbDp_vsEmWho6Mc5amp2nhrA9nazV4LDuWN0c/edit" target="_blank" rel="noopener">📊 すべて見る（Googleスプレッドシート）</a>
   </section>
 
   <section>
@@ -639,6 +681,13 @@
       </div>
 
       <div class="agenda-day">
+        <div class="agenda-date">09/28<span class="dow">月</span></div>
+        <div class="agenda-items">
+          <div class="chip personal"><span class="tag">私用</span><span class="label">松山中平歯科クリニック（矯正相談）</span><span class="time">17:00–18:15</span></div>
+        </div>
+      </div>
+
+      <div class="agenda-day">
         <div class="agenda-date">10/02<span class="dow">金</span></div>
         <div class="agenda-items">
           <div class="chip personal"><span class="tag">私用</span><span class="label">【タスク】再来週のスケジュール提出</span></div>
@@ -676,7 +725,7 @@
   </section>
 
   <footer>
-    <span>2026-09-18 07:29 時点のスナップショット</span>
+    <span>2026-09-18 08:43 時点のスナップショット</span>
     <span>更新するには「ダッシュボード更新して」と伝えてください</span>
   </footer>
 
