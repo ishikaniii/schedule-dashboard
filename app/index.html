@@ -1,0 +1,781 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>スケジュール管理</title>
+<style>
+  :root{
+    --bg:#f2f3f6; --surface:#ffffff; --surface-2:#eceef2;
+    --ink:#1a1d23; --ink-dim:#5b6270; --border:#dde1e7;
+    --strength:#b3402c; --strength-soft:#f6e3df;
+    --cardio:#127b73; --cardio-soft:#dcf1ee;
+    --budget:#a1740f; --budget-soft:#f7ecd6;
+    --goals:#4d47b8; --goals-soft:#e6e5f7;
+    --focus:#2f5fd6;
+    --shadow: 0 1px 2px rgba(20,22,28,.06), 0 8px 24px -12px rgba(20,22,28,.18);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#14161b; --surface:#1c1f26; --surface-2:#242833;
+      --ink:#eef0f3; --ink-dim:#9aa1ad; --border:#2c303c;
+      --strength:#e37059; --strength-soft:#3a251f;
+      --cardio:#3fcdc0; --cardio-soft:#163330;
+      --budget:#e0b13d; --budget-soft:#332911;
+      --goals:#9793e0; --goals-soft:#252353;
+      --focus:#6f95ff;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 28px -12px rgba(0,0,0,.6);
+    }
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);}
+  body{
+    color:var(--ink); font-family:"Work Sans","Hiragino Sans","Noto Sans JP",sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3,.label,.nav-btn{ font-family:"Oswald","Hiragino Sans",sans-serif; }
+  .mono{ font-family:"IBM Plex Mono", ui-monospace, monospace; font-variant-numeric:tabular-nums; }
+
+  .wrap{ max-width: 920px; margin: 0 auto; padding: 20px 16px 64px; }
+
+  /* ---- passcode gate ---- */
+  #gate{
+    position:fixed; inset:0; background:var(--bg); display:flex; align-items:center;
+    justify-content:center; z-index:100; padding:20px;
+  }
+  #gate .box{
+    background:var(--surface); border:1px solid var(--border); border-radius:16px;
+    padding:28px 24px; width:100%; max-width:340px; box-shadow:var(--shadow); text-align:center;
+  }
+  #gate h1{ font-size:20px; margin:0 0 4px; text-transform:uppercase; letter-spacing:.03em; }
+  #gate p{ color:var(--ink-dim); font-size:13px; margin:0 0 16px; }
+  #gate input{
+    width:100%; background:var(--surface-2); border:1px solid var(--border); border-radius:9px;
+    padding:11px 12px; color:var(--ink); font-size:15px; text-align:center; margin-bottom:10px;
+    font-family:"IBM Plex Mono",monospace;
+  }
+  #gate input:focus{ outline:2px solid var(--focus); outline-offset:1px; }
+  #gate button{
+    width:100%; border:none; border-radius:9px; padding:11px; background:var(--goals); color:#fff;
+    font-family:"Oswald",sans-serif; font-size:14px; letter-spacing:.05em; text-transform:uppercase;
+    cursor:pointer;
+  }
+  #gate .err{ color:var(--strength); font-size:12.5px; margin-top:8px; min-height:1.2em; }
+  #app{ display:none; }
+  #app.show{ display:block; }
+
+  header.top{ display:flex; align-items:baseline; justify-content:space-between; gap:12px; padding:4px 2px 18px; flex-wrap:wrap; }
+  header.top h1{ font-size:26px; letter-spacing:.02em; margin:0; text-transform:uppercase; text-wrap:balance; }
+  header.top .sub{ color:var(--ink-dim); font-size:12.5px; }
+
+  nav.tabs{ display:flex; gap:6px; background:var(--surface-2); padding:4px; border-radius:12px; margin-bottom:20px; border:1px solid var(--border); overflow-x:auto; }
+  nav.tabs button{
+    flex:1; min-width:78px; border:none; background:transparent; color:var(--ink-dim);
+    font-family:"Oswald",sans-serif; font-size:13px; letter-spacing:.03em; text-transform:uppercase;
+    padding:10px 6px; border-radius:9px; cursor:pointer; transition: background .15s, color .15s;
+  }
+  nav.tabs button.active{ background:var(--surface); color:var(--ink); box-shadow:var(--shadow); }
+
+  section.panel{ display:none; } section.panel.active{ display:block; }
+  .grid-2{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  @media (max-width:640px){ .grid-2{ grid-template-columns:1fr; } }
+
+  .card{ background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:18px; box-shadow:var(--shadow); }
+  .card + .card{ margin-top:16px; }
+  .card h2{ font-size:15px; text-transform:uppercase; letter-spacing:.06em; margin:0 0 14px; display:flex; align-items:center; gap:8px; justify-content:space-between; }
+  .card h2 .tag{ font-size:10px; color:var(--ink-dim); letter-spacing:.03em; text-transform:none; font-family:"IBM Plex Mono",monospace; }
+  .dot{ width:10px; height:10px; border-radius:50%; display:inline-block; flex:none; }
+  .dot.strength{ background:var(--strength); } .dot.cardio{ background:var(--cardio); }
+  .dot.budget{ background:var(--budget); } .dot.goals{ background:var(--goals); }
+
+  .field{ margin-bottom:12px; }
+  .field label{ display:block; font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-dim); margin-bottom:5px; }
+  .field input[type=text], .field input[type=date], .field input[type=number], .field input[type=file], .field textarea, .field select{
+    width:100%; background:var(--surface-2); border:1px solid var(--border); border-radius:8px;
+    padding:9px 10px; color:var(--ink); font-size:14px; font-family:inherit;
+  }
+  .field input:focus, .field textarea:focus, .field select:focus{ outline:2px solid var(--focus); outline-offset:1px; border-color:transparent; }
+  .row3{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
+  .row2{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  @media (max-width:420px){ .row3{ grid-template-columns:1fr 1fr; } }
+
+  .rpe-wrap{ display:flex; align-items:center; gap:10px; }
+  .rpe-wrap input[type=range]{ flex:1; accent-color:var(--strength); }
+  .rpe-readout{ font-family:"IBM Plex Mono",monospace; min-width:2.4em; text-align:center; background:var(--strength-soft); color:var(--strength); border-radius:6px; padding:3px 6px; font-size:13px; }
+
+  button.submit{ width:100%; border:none; border-radius:9px; padding:11px; margin-top:4px; font-family:"Oswald",sans-serif; font-size:14px; letter-spacing:.05em; text-transform:uppercase; cursor:pointer; color:#fff; }
+  button.submit.strength{ background:var(--strength); } button.submit.cardio{ background:var(--cardio); }
+  button.submit.budget{ background:var(--budget); } button.submit.goals{ background:var(--goals); }
+  button.submit:disabled{ opacity:.5; cursor:not-allowed; }
+
+  .list{ list-style:none; margin:0; padding:0; }
+  .row{ display:flex; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid var(--border); font-size:13.5px; }
+  .row:last-child{ border-bottom:none; }
+  .row .date{ color:var(--ink-dim); width:4.4em; flex:none; font-family:"IBM Plex Mono",monospace; }
+  .row .desc{ flex:1; }
+  .row .amt{ font-family:"IBM Plex Mono",monospace; font-weight:500; flex:none; }
+  .row .del{ background:none; border:none; color:var(--ink-dim); cursor:pointer; font-size:16px; line-height:1; padding:4px; }
+  .row .del:hover{ color:var(--strength); }
+  .row .confirm-btn{
+    background:var(--budget); color:#fff; border:none; border-radius:7px; padding:6px 12px;
+    font-family:"Oswald",sans-serif; font-size:11px; letter-spacing:.03em; text-transform:uppercase; cursor:pointer; flex:none;
+  }
+  .row .confirm-btn:disabled{ opacity:.5; }
+
+  .empty{ color:var(--ink-dim); font-size:13.5px; text-align:center; padding:24px 10px; }
+  .stale{ color:var(--ink-dim); font-size:11.5px; font-family:"IBM Plex Mono",monospace; margin-top:2px; }
+
+  .metric-toggle{ display:flex; gap:6px; margin:12px 0; flex-wrap:wrap; }
+  .metric-toggle button{ border:1px solid var(--border); background:var(--surface-2); color:var(--ink-dim); font-size:12px; padding:6px 12px; border-radius:999px; cursor:pointer; font-family:"Oswald",sans-serif; letter-spacing:.03em; text-transform:uppercase; }
+  .metric-toggle button.active{ background:var(--ink); color:var(--bg); border-color:var(--ink); }
+  .chart-box{ position:relative; height:240px; margin-top:8px; }
+
+  .cal-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+  .cal-head .month-label{ font-size:16px; letter-spacing:.03em; }
+  .cal-head button{ border:1px solid var(--border); background:var(--surface-2); color:var(--ink); border-radius:8px; width:32px; height:32px; cursor:pointer; font-size:15px; }
+  .cal-grid{ display:grid; grid-template-columns:repeat(7,1fr); gap:4px; }
+  .cal-dow{ text-align:center; font-size:11px; color:var(--ink-dim); padding-bottom:4px; text-transform:uppercase; }
+  .cal-cell{ aspect-ratio:1; border-radius:9px; border:1px solid var(--border); background:var(--surface-2); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; cursor:pointer; font-size:12.5px; color:var(--ink); position:relative; }
+  .cal-cell.empty-cell{ visibility:hidden; cursor:default; }
+  .cal-cell.today{ border-color:var(--focus); }
+  .cal-cell:hover{ background:var(--surface); }
+  .cal-cell .dots{ display:flex; gap:3px; } .cal-cell .dots .dot{ width:6px; height:6px; }
+  .day-detail{ margin-top:14px; padding-top:14px; border-top:1px solid var(--border); }
+  .day-detail .dd-title{ font-size:13px; color:var(--ink-dim); margin-bottom:8px; text-transform:uppercase; letter-spacing:.04em; }
+  .dd-item{ border-left:3px solid var(--border); padding:6px 0 6px 10px; margin-bottom:6px; font-size:13.5px; }
+  .dd-item.strength{ border-left-color:var(--strength); } .dd-item.cardio{ border-left-color:var(--cardio); }
+  .dd-item .note{ color:var(--ink-dim); font-size:12.5px; margin-top:2px; }
+
+  .status-banner{ background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:10px 12px; font-size:12.5px; color:var(--ink-dim); margin-bottom:16px; display:none; }
+
+  .goal-block{ margin-bottom:16px; } .goal-block:last-child{ margin-bottom:0; }
+  .goal-block .gb-title{ font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-dim); margin-bottom:4px; }
+  .goal-block .gb-value{ font-size:15px; }
+  .milestone-pill{ display:inline-flex; align-items:center; gap:6px; background:var(--goals-soft); color:var(--goals); border-radius:999px; padding:4px 12px; font-size:12.5px; margin-top:4px; }
+
+  .budget-bar{ height:10px; background:var(--surface-2); border-radius:999px; overflow:hidden; margin:8px 0; }
+  .budget-bar .fill{ height:100%; background:var(--budget); border-radius:999px; }
+  .budget-nums{ display:flex; justify-content:space-between; font-size:12.5px; color:var(--ink-dim); }
+  .budget-nums .now{ color:var(--ink); font-family:"IBM Plex Mono",monospace; font-weight:600; }
+
+  .ocr-preview{ max-width:100%; border-radius:10px; margin:10px 0; display:none; }
+  .ocr-status{ font-size:12.5px; color:var(--ink-dim); margin:6px 0; }
+</style>
+
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Work+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chart.js/4.4.4/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+</head>
+<body>
+
+<div id="gate">
+  <div class="box">
+    <h1>スケジュール管理</h1>
+    <p>パスコードを入力してください</p>
+    <input type="password" id="gate-input" autocomplete="off" inputmode="text">
+    <button id="gate-submit">入る</button>
+    <div class="err" id="gate-err"></div>
+  </div>
+</div>
+
+<div id="app">
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>スケジュール管理</h1>
+      <div class="sub">ダッシュボード・家計簿・目標・トレログ</div>
+    </div>
+  </header>
+
+  <div id="status-banner" class="status-banner"></div>
+
+  <nav class="tabs">
+    <button class="nav-btn active" data-tab="home">ホーム</button>
+    <button class="nav-btn" data-tab="budget">家計簿</button>
+    <button class="nav-btn" data-tab="goals">目標</button>
+    <button class="nav-btn" data-tab="train">トレログ</button>
+  </nav>
+
+  <!-- ============ ホーム ============ -->
+  <section class="panel active" id="panel-home">
+    <div class="card">
+      <h2><span class="dot budget"></span>今月の予算<span class="tag" id="dash-updated"></span></h2>
+      <div id="budget-summary"><p class="empty">まだ同期されていません。PC側の同期スクリプトの実行を待っています。</p></div>
+    </div>
+    <div class="card">
+      <h2>今日の予定</h2>
+      <ul class="list" id="agenda-list"><li class="empty">まだ同期されていません。</li></ul>
+    </div>
+    <div class="card">
+      <h2>未確認の支出<span class="tag" id="pending-count"></span></h2>
+      <ul class="list" id="pending-list"><li class="empty">未確認の支出はありません。</li></ul>
+    </div>
+  </section>
+
+  <!-- ============ 家計簿 ============ -->
+  <section class="panel" id="panel-budget">
+    <div class="card">
+      <h2>家計簿を開く</h2>
+      <p class="empty" id="ledger-link-wrap" style="padding:8px 0;">同期後にリンクが表示されます。</p>
+    </div>
+    <div class="card">
+      <h2><span class="dot budget"></span>レシートから記録</h2>
+      <div class="field">
+        <label for="receipt-file">レシート写真</label>
+        <input type="file" id="receipt-file" accept="image/*" capture="environment">
+      </div>
+      <img id="receipt-preview" class="ocr-preview">
+      <div class="ocr-status" id="ocr-status"></div>
+      <form id="form-receipt" style="display:none;">
+        <div class="row2">
+          <div class="field">
+            <label for="r-amount">金額(円)</label>
+            <input type="number" id="r-amount" min="0" step="1" required>
+          </div>
+          <div class="field">
+            <label for="r-category">カテゴリ</label>
+            <select id="r-category">
+              <option>食費</option><option>日用品</option><option>交通費</option><option>旅行</option>
+              <option>交際費</option><option>趣味・娯楽</option><option>固定費</option><option>その他</option>
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label for="r-memo">メモ（店名など）</label>
+          <input type="text" id="r-memo" placeholder="例：セブンイレブン">
+        </div>
+        <button type="submit" class="submit budget" id="r-submit">記録する</button>
+      </form>
+    </div>
+    <div class="card">
+      <h2>最近の支出</h2>
+      <ul class="list" id="recent-expenses-list"><li class="empty">まだ同期されていません。</li></ul>
+    </div>
+  </section>
+
+  <!-- ============ 目標 ============ -->
+  <section class="panel" id="panel-goals">
+    <div class="card" id="goals-card">
+      <h2><span class="dot goals"></span>人生の目標<span class="tag" id="goals-updated"></span></h2>
+      <p class="empty">まだ同期されていません。</p>
+    </div>
+  </section>
+
+  <!-- ============ トレログ ============ -->
+  <section class="panel" id="panel-train">
+    <div class="grid-2">
+      <div class="card">
+        <h2><span class="dot strength"></span>筋トレを記録</h2>
+        <form id="form-strength">
+          <div class="field"><label for="s-date">日付</label><input type="date" id="s-date" required></div>
+          <div class="field">
+            <label for="s-exercise">種目</label>
+            <input type="text" id="s-exercise" list="exercise-list" placeholder="ベンチプレス" required>
+            <datalist id="exercise-list">
+              <option value="ベンチプレス"><option value="スクワット"><option value="デッドリフト">
+              <option value="ショルダープレス"><option value="懸垂"><option value="バーベルロウ">
+              <option value="ラットプルダウン"><option value="レッグプレス"><option value="アームカール">
+              <option value="ディップス">
+            </datalist>
+          </div>
+          <div class="row3">
+            <div class="field"><label for="s-weight">重量(kg)</label><input type="number" id="s-weight" step="0.5" min="0" required></div>
+            <div class="field"><label for="s-reps">回数</label><input type="number" id="s-reps" step="1" min="1" required></div>
+            <div class="field"><label for="s-sets">セット数</label><input type="number" id="s-sets" step="1" min="1" value="3" required></div>
+          </div>
+          <div class="field">
+            <label for="s-rpe">RPE（体感強度）</label>
+            <div class="rpe-wrap"><input type="range" id="s-rpe" min="1" max="10" step="1" value="7"><span class="rpe-readout mono" id="s-rpe-readout">7</span></div>
+          </div>
+          <div class="field"><label for="s-note">メモ</label><textarea id="s-note" rows="2"></textarea></div>
+          <button type="submit" class="submit strength" id="s-submit">記録する</button>
+        </form>
+      </div>
+      <div class="card">
+        <h2><span class="dot cardio"></span>有酸素を記録</h2>
+        <form id="form-cardio">
+          <div class="field"><label for="c-date">日付</label><input type="date" id="c-date" required></div>
+          <div class="row2">
+            <div class="field"><label for="c-duration">時間(分)</label><input type="number" id="c-duration" step="1" min="1" required></div>
+            <div class="field"><label for="c-distance">距離(km)</label><input type="number" id="c-distance" step="0.1" min="0" placeholder="任意"></div>
+          </div>
+          <div class="field"><label for="c-hr">平均心拍数(bpm)</label><input type="number" id="c-hr" step="1" min="0" placeholder="任意"></div>
+          <div class="field"><label for="c-note">メモ</label><textarea id="c-note" rows="2"></textarea></div>
+          <button type="submit" class="submit cardio" id="c-submit">記録する</button>
+        </form>
+      </div>
+    </div>
+    <div class="card">
+      <h2>最近の記録</h2>
+      <ul class="list" id="recent-train-list"><li class="empty">まだ記録がありません。</li></ul>
+    </div>
+    <div class="card">
+      <h2><span class="dot strength"></span>種目ごとの推移</h2>
+      <select class="field" id="chart-exercise-select" style="width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:9px 10px;color:var(--ink);"></select>
+      <div class="metric-toggle" id="strength-metric-toggle">
+        <button class="active" data-metric="weight">重量(kg)</button>
+        <button data-metric="volume">ボリューム(kg)</button>
+      </div>
+      <div class="chart-box"><canvas id="strength-chart"></canvas></div>
+      <p class="empty" id="strength-chart-empty">まだこの種目の記録がありません。</p>
+    </div>
+    <div class="card">
+      <h2><span class="dot cardio"></span>有酸素の推移</h2>
+      <div class="metric-toggle" id="cardio-metric-toggle">
+        <button class="active" data-metric="duration">時間(分)</button>
+        <button data-metric="distance">距離(km)</button>
+        <button data-metric="hr">心拍数(bpm)</button>
+      </div>
+      <div class="chart-box"><canvas id="cardio-chart"></canvas></div>
+      <p class="empty" id="cardio-chart-empty">まだ有酸素の記録がありません。</p>
+    </div>
+    <div class="card">
+      <div class="cal-head">
+        <button id="cal-prev" aria-label="前の月">‹</button>
+        <div class="month-label" id="cal-month-label"></div>
+        <button id="cal-next" aria-label="次の月">›</button>
+      </div>
+      <div class="cal-grid" id="cal-dow-row"></div>
+      <div class="cal-grid" id="cal-grid" style="margin-top:4px;"></div>
+      <div class="day-detail" id="day-detail" style="display:none;">
+        <div class="dd-title" id="dd-title"></div>
+        <div id="dd-items"></div>
+      </div>
+    </div>
+  </section>
+</div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ============ 設定 ============
+  const SUPABASE_URL = "https://wjdfpoawlnksvieztsyq.supabase.co";
+  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndqZGZwb2F3bG5rc3ZpZXp0c3lxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk3NTU2MzAsImV4cCI6MjEwNTMzMTYzMH0.aC6B74fkt5l9iC1y57RuJ834Claluc0phwJ3Fyk-S50";
+  const PASSCODE_HASH_HEX = "d953f2f2ae6d9853c5a03fbd45e167f4e5e65de669ff7d12d6d170efa8e8cb0a".slice(0,64);
+  const AUTH_STORAGE_KEY = "sk_app_auth_ok";
+
+  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  async function sha256Hex(text){
+    const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+    return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2,"0")).join("");
+  }
+
+  // ============ パスコードゲート ============
+  const gate = document.getElementById("gate");
+  const app = document.getElementById("app");
+  const gateInput = document.getElementById("gate-input");
+  const gateErr = document.getElementById("gate-err");
+
+  function openApp(){
+    gate.style.display = "none";
+    app.classList.add("show");
+    initApp();
+  }
+
+  async function tryUnlock(){
+    const hash = await sha256Hex(gateInput.value.trim());
+    if (hash === PASSCODE_HASH_HEX){
+      try{ localStorage.setItem(AUTH_STORAGE_KEY, hash); }catch(e){}
+      openApp();
+    } else {
+      gateErr.textContent = "パスコードが違います";
+      gateInput.value = "";
+    }
+  }
+  document.getElementById("gate-submit").addEventListener("click", tryUnlock);
+  gateInput.addEventListener("keydown", e => { if (e.key === "Enter") tryUnlock(); });
+
+  (async function checkStoredAuth(){
+    let stored = null;
+    try{ stored = localStorage.getItem(AUTH_STORAGE_KEY); }catch(e){}
+    if (stored && stored === PASSCODE_HASH_HEX) openApp();
+  })();
+
+  // ============ タブ ============
+  const tabButtons = document.querySelectorAll(".nav-btn");
+  const panels = {
+    home: document.getElementById("panel-home"),
+    budget: document.getElementById("panel-budget"),
+    goals: document.getElementById("panel-goals"),
+    train: document.getElementById("panel-train"),
+  };
+  const loadedTabs = new Set();
+  tabButtons.forEach(btn => btn.addEventListener("click", () => {
+    tabButtons.forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    Object.values(panels).forEach(p => p.classList.remove("active"));
+    panels[btn.dataset.tab].classList.add("active");
+    loadTab(btn.dataset.tab);
+  }));
+
+  function escapeHtml(s){
+    return (s == null ? "" : String(s)).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  }
+  function fmtYen(n){ return "¥" + Number(n).toLocaleString("ja-JP"); }
+  const banner = document.getElementById("status-banner");
+  function showBanner(msg){ banner.textContent = msg; banner.style.display = "block"; }
+  function timeAgoLabel(iso){
+    if (!iso) return "";
+    const d = new Date(iso);
+    const mins = Math.floor((Date.now() - d.getTime()) / 60000);
+    if (mins < 60) return `${mins}分前に同期`;
+    if (mins < 60*24) return `${Math.floor(mins/60)}時間前に同期`;
+    return `${Math.floor(mins/60/24)}日前に同期`;
+  }
+
+  function loadTab(tab){
+    if (tab === "home") { loadHome(); }
+    else if (tab === "budget") { loadBudgetTab(); }
+    else if (tab === "goals") { loadGoals(); }
+    else if (tab === "train") { renderStrengthChart(); renderCardioChart(); if (!trainInited) initTrain(); }
+  }
+
+  function initApp(){
+    loadHome();
+    subscribeTrainLogs();
+  }
+
+  // ============ ホーム：ダッシュボードスナップショット ============
+  async function loadHome(){
+    const { data, error } = await sb.from("dashboard_snapshot").select("data, updated_at").eq("id", 1).maybeSingle();
+    if (error){ showBanner("ダッシュボードの読み込みでエラー: " + error.message); return; }
+    const snap = data ? data.data : null;
+    document.getElementById("dash-updated").textContent = data ? timeAgoLabel(data.updated_at) : "";
+
+    const budgetEl = document.getElementById("budget-summary");
+    if (snap && snap.budget){
+      const { spent, cap, remaining } = snap.budget;
+      const pct = cap ? Math.min(100, Math.round((spent/cap)*100)) : 0;
+      budgetEl.innerHTML = `
+        <div class="budget-nums"><span>使用額</span><span class="now">${fmtYen(spent)}${cap ? " / " + fmtYen(cap) : ""}</span></div>
+        <div class="budget-bar"><div class="fill" style="width:${pct}%"></div></div>
+        ${remaining != null ? `<div class="budget-nums"><span>残り</span><span class="now">${fmtYen(remaining)}</span></div>` : ""}`;
+    } else {
+      budgetEl.innerHTML = '<p class="empty">まだ同期されていません。PC側の同期スクリプトの実行を待っています。</p>';
+    }
+
+    const agendaEl = document.getElementById("agenda-list");
+    if (snap && snap.agenda && snap.agenda.length){
+      agendaEl.innerHTML = snap.agenda.map(a => `<li class="row"><span class="date mono">${escapeHtml((a.date||"").slice(5))}</span><span class="desc">${escapeHtml(a.title)}</span></li>`).join("");
+    } else {
+      agendaEl.innerHTML = '<li class="empty">予定はありません。</li>';
+    }
+
+    await loadPending();
+  }
+
+  async function loadPending(){
+    const { data, error } = await sb.from("pending_expenses").select("*").eq("status","pending").order("created_at",{ascending:false});
+    const listEl = document.getElementById("pending-list");
+    const countEl = document.getElementById("pending-count");
+    if (error){ listEl.innerHTML = '<li class="empty">読み込みエラー</li>'; return; }
+    countEl.textContent = data.length ? `(${data.length}件)` : "";
+    if (!data.length){ listEl.innerHTML = '<li class="empty">未確認の支出はありません。</li>'; return; }
+    listEl.innerHTML = data.map(p => `
+      <li class="row">
+        <span class="desc">${escapeHtml(p.origin)}${p.memo ? " / " + escapeHtml(p.memo) : ""}</span>
+        <span class="amt mono">${fmtYen(p.amount)}</span>
+        <button class="confirm-btn" data-id="${p.id}">記録する</button>
+      </li>`).join("");
+    listEl.querySelectorAll(".confirm-btn").forEach(btn => btn.addEventListener("click", async () => {
+      btn.disabled = true; btn.textContent = "...";
+      const { error } = await sb.from("pending_expenses").update({ status: "confirmed", confirmed_at: new Date().toISOString() }).eq("id", btn.dataset.id);
+      if (error){ showBanner("確定に失敗しました: " + error.message); btn.disabled = false; btn.textContent = "記録する"; }
+      else { loadPending(); }
+    }));
+  }
+
+  // ============ 家計簿タブ ============
+  async function loadBudgetTab(){
+    const { data } = await sb.from("dashboard_snapshot").select("data").eq("id",1).maybeSingle();
+    const snap = data ? data.data : null;
+    const linkWrap = document.getElementById("ledger-link-wrap");
+    if (snap && snap.ledger_url){
+      linkWrap.outerHTML = `<a href="${escapeHtml(snap.ledger_url)}" target="_blank" rel="noopener" class="submit budget" style="display:block;text-decoration:none;text-align:center;">家計簿を開く（Google Sheets）</a>`;
+    }
+    const recentEl = document.getElementById("recent-expenses-list");
+    if (snap && snap.recent_expenses && snap.recent_expenses.length){
+      recentEl.innerHTML = snap.recent_expenses.slice(0,15).map(e => `
+        <li class="row"><span class="date mono">${escapeHtml((e.date||"").slice(5))}</span><span class="desc">${escapeHtml(e.category)}${e.memo ? " / " + escapeHtml(e.memo) : ""}</span><span class="amt mono">${fmtYen(e.amount)}</span></li>`).join("");
+    } else {
+      recentEl.innerHTML = '<li class="empty">まだ同期されていません。</li>';
+    }
+  }
+
+  // ---- レシートOCR ----
+  const receiptFile = document.getElementById("receipt-file");
+  const receiptPreview = document.getElementById("receipt-preview");
+  const ocrStatus = document.getElementById("ocr-status");
+  const formReceipt = document.getElementById("form-receipt");
+
+  receiptFile.addEventListener("change", async () => {
+    const file = receiptFile.files[0];
+    if (!file) return;
+    receiptPreview.src = URL.createObjectURL(file);
+    receiptPreview.style.display = "block";
+    formReceipt.style.display = "none";
+    ocrStatus.textContent = "文字を読み取っています...";
+    try{
+      const result = await Tesseract.recognize(file, "jpn+eng", {
+        logger: m => { if (m.status === "recognizing text") ocrStatus.textContent = `読み取り中... ${Math.round(m.progress*100)}%`; }
+      });
+      const text = result.data.text || "";
+      const amount = guessTotalAmount(text);
+      ocrStatus.textContent = amount ? `金額の候補: ${fmtYen(amount)}（下で確認・修正してください）` : "金額を自動で読み取れませんでした。手入力してください。";
+      document.getElementById("r-amount").value = amount || "";
+      formReceipt.style.display = "block";
+    }catch(err){
+      ocrStatus.textContent = "読み取りに失敗しました。手入力してください。";
+      formReceipt.style.display = "block";
+    }
+  });
+
+  function guessTotalAmount(text){
+    const lines = text.split("\n");
+    const candidates = [];
+    const totalKeywords = /合計|お会計|total/i;
+    for (const line of lines){
+      const nums = [...line.matchAll(/[¥\\]?\s*([0-9,]{2,7})\s*円?/g)].map(m => parseInt(m[1].replace(/,/g,""),10)).filter(n => n >= 10 && n < 1000000);
+      if (nums.length){
+        const weight = totalKeywords.test(line) ? 10 : 1;
+        nums.forEach(n => candidates.push({ n, weight }));
+      }
+    }
+    if (!candidates.length) return null;
+    candidates.sort((a,b) => b.weight - a.weight || b.n - a.n);
+    return candidates[0].n;
+  }
+
+  formReceipt.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById("r-submit");
+    btn.disabled = true;
+    const { error } = await sb.from("pending_expenses").insert({
+      origin: "receipt_scan",
+      amount: parseInt(document.getElementById("r-amount").value, 10),
+      category: document.getElementById("r-category").value,
+      memo: document.getElementById("r-memo").value.trim(),
+      status: "confirmed",
+      confirmed_at: new Date().toISOString(),
+    });
+    if (error){ showBanner("記録に失敗しました: " + error.message); }
+    else {
+      formReceipt.reset(); formReceipt.style.display = "none";
+      receiptPreview.style.display = "none"; receiptFile.value = "";
+      ocrStatus.textContent = "記録しました。次回の同期でメインの家計簿に反映されます。";
+    }
+    btn.disabled = false;
+  });
+
+  // ============ 目標タブ ============
+  async function loadGoals(){
+    const { data, error } = await sb.from("goals_snapshot").select("data, updated_at").eq("id",1).maybeSingle();
+    const card = document.getElementById("goals-card");
+    if (error){ showBanner("目標の読み込みでエラー: " + error.message); return; }
+    document.getElementById("goals-updated").textContent = data ? timeAgoLabel(data.updated_at) : "";
+    const g = data ? data.data : null;
+    if (!g){ return; } // keep placeholder
+    const blocks = [];
+    if (g.vision_summary) blocks.push(`<div class="goal-block"><div class="gb-title">ビジョン</div><div class="gb-value">${escapeHtml(g.vision_summary)}</div></div>`);
+    if (g.income_target) blocks.push(`<div class="goal-block"><div class="gb-title">不労所得の目標</div><div class="gb-value">手取り ${fmtYen(g.income_target.net_jpy)}/年</div></div>`);
+    if (g.career_track_status) blocks.push(`<div class="goal-block"><div class="gb-title">本業ルート</div><div class="gb-value">${escapeHtml(g.career_track_status)}</div></div>`);
+    if (g.saas) blocks.push(`<div class="goal-block"><div class="gb-title">${escapeHtml(g.saas.name||"SaaS")}</div><div class="gb-value">${escapeHtml(g.saas.stage||"")}</div>${g.saas.current_milestone ? `<div class="milestone-pill">次: ${escapeHtml(g.saas.current_milestone.name)}（${escapeHtml(g.saas.current_milestone.target_period_text||"")}）</div>` : ""}</div>`);
+    if (g.home_ownership) blocks.push(`<div class="goal-block"><div class="gb-title">持ち家</div><div class="gb-value">${g.home_ownership.target_age}歳（${g.home_ownership.target_year}年）目標</div></div>`);
+    if (g.health && g.health.schedule) blocks.push(`<div class="goal-block"><div class="gb-title">健康</div>${g.health.schedule.map(s=>`<div class="milestone-pill">${escapeHtml(s.activity)} ${escapeHtml(s.days)} ${escapeHtml(s.time)}</div>`).join(" ")}</div>`);
+    card.innerHTML = `<h2><span class="dot goals"></span>人生の目標<span class="tag" id="goals-updated">${data ? timeAgoLabel(data.updated_at) : ""}</span></h2>` + (blocks.join("") || '<p class="empty">まだ同期されていません。</p>');
+  }
+
+  // ============ トレログタブ ============
+  let strengthLogs = [], cardioLogs = [];
+  let strengthMetric = "weight", cardioMetric = "duration";
+  let calMonth = new Date(); calMonth.setDate(1);
+  let strengthChartInst = null, cardioChartInst = null;
+  let trainInited = false;
+
+  document.getElementById("s-date").value = new Date().toISOString().slice(0,10);
+  document.getElementById("c-date").value = new Date().toISOString().slice(0,10);
+  const rpeInput = document.getElementById("s-rpe");
+  rpeInput.addEventListener("input", () => { document.getElementById("s-rpe-readout").textContent = rpeInput.value; });
+
+  function subscribeTrainLogs(){
+    sb.from("strength_logs").select("*").order("date",{ascending:false}).limit(500).then(({data,error}) => {
+      if (!error){ strengthLogs = data || []; onTrainDataChanged(); }
+    });
+    sb.from("cardio_logs").select("*").order("date",{ascending:false}).limit(500).then(({data,error}) => {
+      if (!error){ cardioLogs = data || []; onTrainDataChanged(); }
+    });
+    sb.channel("train_logs_sync")
+      .on("postgres_changes", { event:"*", schema:"public", table:"strength_logs" }, () => refetchStrength())
+      .on("postgres_changes", { event:"*", schema:"public", table:"cardio_logs" }, () => refetchCardio())
+      .subscribe();
+  }
+  async function refetchStrength(){ const {data} = await sb.from("strength_logs").select("*").order("date",{ascending:false}).limit(500); strengthLogs = data || []; onTrainDataChanged(); }
+  async function refetchCardio(){ const {data} = await sb.from("cardio_logs").select("*").order("date",{ascending:false}).limit(500); cardioLogs = data || []; onTrainDataChanged(); }
+
+  function onTrainDataChanged(){
+    renderRecentTrain();
+    populateExerciseSelect();
+    if (panels.train.classList.contains("active")){ renderStrengthChart(); renderCardioChart(); renderCalendar(); }
+  }
+
+  function initTrain(){
+    trainInited = true;
+    renderCalendar();
+  }
+
+  document.getElementById("form-strength").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById("s-submit"); btn.disabled = true;
+    const { error } = await sb.from("strength_logs").insert({
+      date: document.getElementById("s-date").value,
+      exercise: document.getElementById("s-exercise").value.trim(),
+      weight_kg: parseFloat(document.getElementById("s-weight").value),
+      reps: parseInt(document.getElementById("s-reps").value,10),
+      sets: parseInt(document.getElementById("s-sets").value,10),
+      rpe: parseInt(rpeInput.value,10),
+      note: document.getElementById("s-note").value.trim(),
+    });
+    if (error){ showBanner("記録に失敗しました: " + error.message); } else { document.getElementById("s-note").value=""; refetchStrength(); }
+    btn.disabled = false;
+  });
+
+  document.getElementById("form-cardio").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById("c-submit"); btn.disabled = true;
+    const distVal = document.getElementById("c-distance").value;
+    const hrVal = document.getElementById("c-hr").value;
+    const { error } = await sb.from("cardio_logs").insert({
+      date: document.getElementById("c-date").value,
+      duration_min: parseInt(document.getElementById("c-duration").value,10),
+      distance_km: distVal ? parseFloat(distVal) : null,
+      heart_rate: hrVal ? parseInt(hrVal,10) : null,
+      note: document.getElementById("c-note").value.trim(),
+    });
+    if (error){ showBanner("記録に失敗しました: " + error.message); } else { document.getElementById("c-note").value=""; refetchCardio(); }
+    btn.disabled = false;
+  });
+
+  function renderRecentTrain(){
+    const list = document.getElementById("recent-train-list");
+    const merged = [
+      ...strengthLogs.map(l => ({...l, type:"strength"})),
+      ...cardioLogs.map(l => ({...l, type:"cardio"})),
+    ].sort((a,b) => (b.date+(b.created_at||"")).localeCompare(a.date+(a.created_at||"")));
+    if (!merged.length){ list.innerHTML = '<li class="empty">まだ記録がありません。</li>'; return; }
+    list.innerHTML = merged.slice(0,15).map(l => {
+      const desc = l.type === "strength"
+        ? `<span class="dot strength" style="margin-right:6px;"></span>${escapeHtml(l.exercise)} ${l.weight_kg}kg × ${l.reps}回 × ${l.sets}セット（RPE ${l.rpe ?? "-"}）`
+        : `<span class="dot cardio" style="margin-right:6px;"></span>有酸素 ${l.duration_min}分${l.distance_km ? " / " + l.distance_km + "km" : ""}${l.heart_rate ? " / 平均" + l.heart_rate + "bpm" : ""}`;
+      return `<li class="row"><span class="date mono">${l.date.slice(5)}</span><span class="desc">${desc}</span><button class="del" data-id="${l.id}" data-type="${l.type}">×</button></li>`;
+    }).join("");
+    list.querySelectorAll(".del").forEach(btn => btn.addEventListener("click", async () => {
+      const table = btn.dataset.type === "strength" ? "strength_logs" : "cardio_logs";
+      await sb.from(table).delete().eq("id", btn.dataset.id);
+      if (table === "strength_logs") refetchStrength(); else refetchCardio();
+    }));
+  }
+
+  function populateExerciseSelect(){
+    const sel = document.getElementById("chart-exercise-select");
+    const prev = sel.value;
+    const names = [...new Set(strengthLogs.map(l => l.exercise))].sort();
+    sel.innerHTML = names.length ? names.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join("") : '<option value="">記録がありません</option>';
+    if (names.includes(prev)) sel.value = prev;
+  }
+  document.getElementById("chart-exercise-select").addEventListener("change", renderStrengthChart);
+  document.getElementById("strength-metric-toggle").addEventListener("click", (e) => {
+    if (e.target.tagName !== "BUTTON") return;
+    strengthMetric = e.target.dataset.metric;
+    [...e.currentTarget.children].forEach(b => b.classList.toggle("active", b===e.target));
+    renderStrengthChart();
+  });
+  document.getElementById("cardio-metric-toggle").addEventListener("click", (e) => {
+    if (e.target.tagName !== "BUTTON") return;
+    cardioMetric = e.target.dataset.metric;
+    [...e.currentTarget.children].forEach(b => b.classList.toggle("active", b===e.target));
+    renderCardioChart();
+  });
+
+  function cssVar(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+  function chartOptions(unitLabel){
+    const inkDim = cssVar("--ink-dim"), border = cssVar("--border");
+    return { responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label: ctx => ctx.parsed.y + " " + unitLabel } } },
+      scales:{ x:{ ticks:{color:inkDim, font:{family:"IBM Plex Mono",size:11}}, grid:{color:border} },
+               y:{ ticks:{color:inkDim, font:{family:"IBM Plex Mono",size:11}}, grid:{color:border}, beginAtZero:true } } };
+  }
+
+  function renderStrengthChart(){
+    const sel = document.getElementById("chart-exercise-select");
+    const exercise = sel.value;
+    const emptyEl = document.getElementById("strength-chart-empty");
+    const canvas = document.getElementById("strength-chart");
+    const rows = strengthLogs.filter(l => l.exercise === exercise).sort((a,b) => a.date.localeCompare(b.date));
+    if (!exercise || !rows.length){ canvas.style.display="none"; emptyEl.style.display="block"; if(strengthChartInst){strengthChartInst.destroy();strengthChartInst=null;} return; }
+    canvas.style.display="block"; emptyEl.style.display="none";
+    const labels = rows.map(r => r.date.slice(5));
+    const data = rows.map(r => strengthMetric === "weight" ? r.weight_kg : r.weight_kg*r.reps*r.sets);
+    if (strengthChartInst) strengthChartInst.destroy();
+    strengthChartInst = new Chart(canvas.getContext("2d"), { type:"line", data:{labels, datasets:[{data, borderColor:cssVar("--strength"), backgroundColor:cssVar("--strength-soft"), fill:true, tension:.25, pointRadius:3, pointBackgroundColor:cssVar("--strength")}]}, options: chartOptions(strengthMetric==="weight"?"kg":"kg(ボリューム)") });
+  }
+  function renderCardioChart(){
+    const emptyEl = document.getElementById("cardio-chart-empty");
+    const canvas = document.getElementById("cardio-chart");
+    const rows = [...cardioLogs].sort((a,b)=>a.date.localeCompare(b.date)).filter(r => cardioMetric==="duration" ? true : (cardioMetric==="distance" ? r.distance_km!=null : r.heart_rate!=null));
+    if (!rows.length){ canvas.style.display="none"; emptyEl.style.display="block"; if(cardioChartInst){cardioChartInst.destroy();cardioChartInst=null;} return; }
+    canvas.style.display="block"; emptyEl.style.display="none";
+    const labels = rows.map(r => r.date.slice(5));
+    const data = rows.map(r => cardioMetric==="duration" ? r.duration_min : (cardioMetric==="distance" ? r.distance_km : r.heart_rate));
+    const unit = cardioMetric==="duration" ? "分" : (cardioMetric==="distance" ? "km" : "bpm");
+    if (cardioChartInst) cardioChartInst.destroy();
+    cardioChartInst = new Chart(canvas.getContext("2d"), { type:"line", data:{labels, datasets:[{data, borderColor:cssVar("--cardio"), backgroundColor:cssVar("--cardio-soft"), fill:true, tension:.25, pointRadius:3, pointBackgroundColor:cssVar("--cardio")}]}, options: chartOptions(unit) });
+  }
+
+  const DOW = ["月","火","水","木","金","土","日"];
+  document.getElementById("cal-dow-row").innerHTML = DOW.map(d => `<div class="cal-dow">${d}</div>`).join("");
+  document.getElementById("cal-prev").addEventListener("click", () => { calMonth.setMonth(calMonth.getMonth()-1); renderCalendar(); });
+  document.getElementById("cal-next").addEventListener("click", () => { calMonth.setMonth(calMonth.getMonth()+1); renderCalendar(); });
+
+  function renderCalendar(){
+    const y = calMonth.getFullYear(), m = calMonth.getMonth();
+    document.getElementById("cal-month-label").textContent = `${y}年 ${m+1}月`;
+    const byDate = {};
+    strengthLogs.forEach(l => { (byDate[l.date] ||= {s:false,c:false}).s = true; });
+    cardioLogs.forEach(l => { (byDate[l.date] ||= {s:false,c:false}).c = true; });
+    const firstDow = (new Date(y,m,1).getDay()+6)%7;
+    const daysInMonth = new Date(y,m+1,0).getDate();
+    const today = new Date().toISOString().slice(0,10);
+    const grid = document.getElementById("cal-grid");
+    grid.innerHTML = "";
+    for (let i=0;i<firstDow;i++){ const c=document.createElement("div"); c.className="cal-cell empty-cell"; grid.appendChild(c); }
+    for (let d=1; d<=daysInMonth; d++){
+      const dateStr = `${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+      const cell = document.createElement("div");
+      cell.className = "cal-cell" + (dateStr===today ? " today" : "");
+      const marks = byDate[dateStr];
+      cell.innerHTML = `<span>${d}</span><span class="dots">${marks&&marks.s?'<span class="dot strength"></span>':""}${marks&&marks.c?'<span class="dot cardio"></span>':""}</span>`;
+      cell.addEventListener("click", () => showDayDetail(dateStr));
+      grid.appendChild(cell);
+    }
+  }
+  function showDayDetail(dateStr){
+    const panel = document.getElementById("day-detail");
+    const sRows = strengthLogs.filter(l => l.date===dateStr);
+    const cRows = cardioLogs.filter(l => l.date===dateStr);
+    if (!sRows.length && !cRows.length){ panel.style.display="none"; return; }
+    panel.style.display = "block";
+    document.getElementById("dd-title").textContent = dateStr + " の記録";
+    const items = document.getElementById("dd-items");
+    items.innerHTML = "";
+    sRows.forEach(l => { const d=document.createElement("div"); d.className="dd-item strength"; d.innerHTML = `${escapeHtml(l.exercise)} ${l.weight_kg}kg × ${l.reps}回 × ${l.sets}セット（RPE ${l.rpe??"-"}）` + (l.note?`<div class="note">${escapeHtml(l.note)}</div>`:""); items.appendChild(d); });
+    cRows.forEach(l => { const d=document.createElement("div"); d.className="dd-item cardio"; d.innerHTML = `有酸素 ${l.duration_min}分${l.distance_km?" / "+l.distance_km+"km":""}${l.heart_rate?" / 平均"+l.heart_rate+"bpm":""}` + (l.note?`<div class="note">${escapeHtml(l.note)}</div>`:""); items.appendChild(d); });
+  }
+
+})();
+</script>
+</body>
+</html>
