@@ -12,6 +12,7 @@
     --cardio:#127b73; --cardio-soft:#dcf1ee;
     --budget:#a1740f; --budget-soft:#f7ecd6;
     --goals:#4d47b8; --goals-soft:#e6e5f7;
+    --shift:#2f8f4f; --shift-soft:#e3f3e7;
     --focus:#2f5fd6;
     --shadow: 0 1px 2px rgba(20,22,28,.06), 0 8px 24px -12px rgba(20,22,28,.18);
   }
@@ -23,6 +24,7 @@
       --cardio:#3fcdc0; --cardio-soft:#163330;
       --budget:#e0b13d; --budget-soft:#332911;
       --goals:#9793e0; --goals-soft:#252353;
+      --shift:#5fd382; --shift-soft:#173821;
       --focus:#6f95ff;
       --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 28px -12px rgba(0,0,0,.6);
     }
@@ -87,6 +89,7 @@
   .dot{ width:10px; height:10px; border-radius:50%; display:inline-block; flex:none; }
   .dot.strength{ background:var(--strength); } .dot.cardio{ background:var(--cardio); }
   .dot.budget{ background:var(--budget); } .dot.goals{ background:var(--goals); }
+  .dot.shift{ background:var(--shift); } .dot.personal{ background:var(--ink-dim); }
 
   .field{ margin-bottom:12px; }
   .field label{ display:block; font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-dim); margin-bottom:5px; }
@@ -144,7 +147,12 @@
   .day-detail .dd-title{ font-size:13px; color:var(--ink-dim); margin-bottom:8px; text-transform:uppercase; letter-spacing:.04em; }
   .dd-item{ border-left:3px solid var(--border); padding:6px 0 6px 10px; margin-bottom:6px; font-size:13.5px; }
   .dd-item.strength{ border-left-color:var(--strength); } .dd-item.cardio{ border-left-color:var(--cardio); }
+  .dd-item.shift{ border-left-color:var(--shift); } .dd-item.goals{ border-left-color:var(--goals); }
+  .dd-item.personal{ border-left-color:var(--ink-dim); }
   .dd-item .note{ color:var(--ink-dim); font-size:12.5px; margin-top:2px; }
+
+  .legend{ display:flex; flex-wrap:wrap; gap:12px; margin-bottom:12px; font-size:12px; color:var(--ink-dim); }
+  .legend span{ display:inline-flex; align-items:center; gap:5px; }
 
   .status-banner{ background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:10px 12px; font-size:12.5px; color:var(--ink-dim); margin-bottom:16px; display:none; }
 
@@ -210,7 +218,7 @@
   <header class="top">
     <div>
       <h1>LifeBase</h1>
-      <div class="sub">ダッシュボード・家計簿・目標・トレログ</div>
+      <div class="sub">ダッシュボード・家計簿・スケジュール・目標・トレログ</div>
     </div>
   </header>
 
@@ -222,6 +230,7 @@
   <nav class="tabs">
     <button class="nav-btn active" data-tab="home">ホーム</button>
     <button class="nav-btn" data-tab="budget">家計簿</button>
+    <button class="nav-btn" data-tab="schedule">スケジュール</button>
     <button class="nav-btn" data-tab="train">トレログ</button>
     <button class="nav-btn" data-tab="goals">目標</button>
   </nav>
@@ -320,6 +329,31 @@
     <div class="card">
       <h2>最近の支出</h2>
       <ul class="list" id="recent-expenses-list"><li class="empty">まだ同期されていません。</li></ul>
+    </div>
+  </section>
+
+  <!-- ============ スケジュール ============ -->
+  <section class="panel" id="panel-schedule">
+    <div class="card">
+      <h2>予定カレンダー<span class="tag" id="sched-updated"></span></h2>
+      <div class="legend">
+        <span><span class="dot strength"></span>締切</span>
+        <span><span class="dot shift"></span>バイト</span>
+        <span><span class="dot goals"></span>授業</span>
+        <span><span class="dot personal"></span>私用</span>
+      </div>
+      <div class="cal-head">
+        <button id="sched-cal-prev" aria-label="前の月">‹</button>
+        <div class="month-label" id="sched-cal-month-label"></div>
+        <button id="sched-cal-next" aria-label="次の月">›</button>
+      </div>
+      <div class="cal-grid" id="sched-cal-dow-row"></div>
+      <div class="cal-grid" id="sched-cal-grid" style="margin-top:4px;"></div>
+      <div class="day-detail" id="sched-day-detail" style="display:none;">
+        <div class="dd-title" id="sched-dd-title"></div>
+        <div id="sched-dd-items"></div>
+      </div>
+      <p class="empty" id="sched-empty" style="display:none;">まだ同期されていません。PC側の同期スクリプトの実行を待っています。</p>
     </div>
   </section>
 
@@ -468,11 +502,12 @@
   // 目標は今後タブが増えても常に一番最後（ユーザー指定、2026-09-19）。
   // 新しいタブを追加するときはこの配列とnav要素の両方で「goals」の手前に
   // 挿入すること。スワイプもこの並び順で前後する。
-  const TAB_ORDER = ["home", "budget", "train", "goals"];
+  const TAB_ORDER = ["home", "budget", "schedule", "train", "goals"];
   const tabButtons = document.querySelectorAll(".nav-btn");
   const panels = {
     home: document.getElementById("panel-home"),
     budget: document.getElementById("panel-budget"),
+    schedule: document.getElementById("panel-schedule"),
     goals: document.getElementById("panel-goals"),
     train: document.getElementById("panel-train"),
   };
@@ -536,6 +571,7 @@
   function loadTab(tab){
     if (tab === "home") { loadHome(); }
     else if (tab === "budget") { loadBudgetTab(); }
+    else if (tab === "schedule") { loadSchedule(); }
     else if (tab === "goals") { loadGoals(); }
     else if (tab === "train") { renderStrengthChart(); renderCardioChart(); if (!trainInited) initTrain(); }
   }
@@ -545,10 +581,23 @@
     subscribeTrainLogs();
   }
 
+  // dashboard_snapshotはホーム・家計簿・スケジュールタブが共通で読むので、
+  // タブを切り替えるたびに毎回フェッチし直さないようキャッシュしておく
+  // （2026-09-19、スケジュールタブ追加時に導入）。
+  let dashboardSnapCache = null;
+  // 戻り値: {row}（rowはnull=まだ同期なし、または実データ）／エラー時はundefined
+  async function fetchDashboardSnap(){
+    const { data, error } = await sb.from("dashboard_snapshot").select("data, updated_at").eq("id", 1).maybeSingle();
+    if (error){ showBanner("ダッシュボードの読み込みでエラー: " + error.message); return undefined; }
+    dashboardSnapCache = data || null;
+    return { row: dashboardSnapCache };
+  }
+
   // ============ ホーム：ダッシュボードスナップショット ============
   async function loadHome(){
-    const { data, error } = await sb.from("dashboard_snapshot").select("data, updated_at").eq("id", 1).maybeSingle();
-    if (error){ showBanner("ダッシュボードの読み込みでエラー: " + error.message); return; }
+    const result = await fetchDashboardSnap();
+    if (result === undefined) return; // フェッチ自体が失敗（バナー表示済み）
+    const data = result.row;
     const snap = data ? data.data : null;
     document.getElementById("dash-updated").textContent = data ? timeAgoLabel(data.updated_at) : "";
 
@@ -632,6 +681,75 @@
     } else {
       recentEl.innerHTML = '<li class="empty">まだ同期されていません。</li>';
     }
+  }
+
+  // ============ スケジュールタブ（Googleカレンダー風の月表示） ============
+  // 2026-09-19追加。データはdashboard_snapshot.calendar_events（PC側の
+  // sync_supabase.pyが前7日〜先45日の範囲で書き込む、締切・バイト・授業・
+  // 私用の4種）。トレログの月カレンダー（strengthLogs/cardioLogs版）と
+  // 同じ構造だが、家族種別(family_type)が4種になった分だけ拡張している。
+  let schedMonth = new Date(); schedMonth.setDate(1);
+  let schedEventsByDate = {};
+
+  const SCHED_DOW = ["月","火","水","木","金","土","日"];
+  document.getElementById("sched-cal-dow-row").innerHTML = SCHED_DOW.map(d => `<div class="cal-dow">${d}</div>`).join("");
+  document.getElementById("sched-cal-prev").addEventListener("click", () => { schedMonth.setMonth(schedMonth.getMonth()-1); renderSchedCalendar(); });
+  document.getElementById("sched-cal-next").addEventListener("click", () => { schedMonth.setMonth(schedMonth.getMonth()+1); renderSchedCalendar(); });
+
+  const FAMILY_DOT_CLASS = { assignment_due: "strength", shift: "shift", class: "goals", personal: "personal" };
+  const FAMILY_LABEL = { assignment_due: "締切", shift: "バイト", class: "授業", personal: "私用" };
+
+  async function loadSchedule(){
+    let row = dashboardSnapCache;
+    if (row === null){ const r = await fetchDashboardSnap(); if (r === undefined) return; row = r.row; }
+    const snap = row ? row.data : null;
+    document.getElementById("sched-updated").textContent = row ? timeAgoLabel(row.updated_at) : "";
+    const events = (snap && snap.calendar_events) || [];
+    document.getElementById("sched-empty").style.display = events.length ? "none" : "block";
+
+    schedEventsByDate = {};
+    events.forEach(ev => { (schedEventsByDate[ev.date] ||= []).push(ev); });
+    renderSchedCalendar();
+  }
+
+  function renderSchedCalendar(){
+    const y = schedMonth.getFullYear(), m = schedMonth.getMonth();
+    document.getElementById("sched-cal-month-label").textContent = `${y}年 ${m+1}月`;
+    const firstDow = (new Date(y,m,1).getDay()+6)%7;
+    const daysInMonth = new Date(y,m+1,0).getDate();
+    const today = new Date().toISOString().slice(0,10);
+    const grid = document.getElementById("sched-cal-grid");
+    grid.innerHTML = "";
+    for (let i=0;i<firstDow;i++){ const c=document.createElement("div"); c.className="cal-cell empty-cell"; grid.appendChild(c); }
+    for (let d=1; d<=daysInMonth; d++){
+      const dateStr = `${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+      const cell = document.createElement("div");
+      cell.className = "cal-cell" + (dateStr===today ? " today" : "");
+      const dayEvents = schedEventsByDate[dateStr] || [];
+      const seenTypes = [...new Set(dayEvents.map(e => e.family_type))];
+      const dots = seenTypes.map(t => `<span class="dot ${FAMILY_DOT_CLASS[t] || "personal"}"></span>`).join("");
+      cell.innerHTML = `<span>${d}</span><span class="dots">${dots}</span>`;
+      cell.addEventListener("click", () => showSchedDayDetail(dateStr));
+      grid.appendChild(cell);
+    }
+  }
+
+  function showSchedDayDetail(dateStr){
+    const panel = document.getElementById("sched-day-detail");
+    const items = (schedEventsByDate[dateStr] || []).slice().sort((a,b) => (a.start_time||"").localeCompare(b.start_time||""));
+    if (!items.length){ panel.style.display = "none"; return; }
+    panel.style.display = "block";
+    document.getElementById("sched-dd-title").textContent = dateStr + " の予定";
+    const wrap = document.getElementById("sched-dd-items");
+    wrap.innerHTML = "";
+    items.forEach(ev => {
+      const d = document.createElement("div");
+      d.className = "dd-item " + (FAMILY_DOT_CLASS[ev.family_type] || "personal");
+      const time = ev.start_time ? `${ev.start_time}${ev.end_time ? "–"+ev.end_time : ""} / ` : "";
+      const amount = ev.amount ? `（${fmtYen(ev.amount)}）` : "";
+      d.innerHTML = `<span class="note" style="display:inline;">${FAMILY_LABEL[ev.family_type] || ""}</span> ${time}${escapeHtml(ev.title)}${amount}`;
+      wrap.appendChild(d);
+    });
   }
 
   // ---- レシートOCR ----
