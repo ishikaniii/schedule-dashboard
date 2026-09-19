@@ -1608,86 +1608,164 @@
       if (muscleId) (BODY.meshes[muscleId] = BODY.meshes[muscleId] || []).push(mesh);
       return mesh;
     };
-    // 高分割の楕円体（筋肉の膨らみ用）。拡大しても多角形が目立たない滑らかさ。
+    // 高分割の楕円体。筋肉の「膨らみ」に使うが、2026-09-19後半の見直しで
+    // 分かった通り、球をそのまま置くと団子のように見える。ここから先は
+    // 「奥行き(z/depthの引数)を意図的に浅くして体表に貼りついた膨らみに
+    // する」「細長い筋肉は楕円体ではなくfusiform（紡錘形）のLatheで筋腹を
+    // 表現する」という2つの方針で作り直している。
     const bump = (rx, ry, rz) => {
       const geo = new THREE.SphereGeometry(1, 28, 20);
       geo.scale(rx, ry, rz);
       geo.computeVertexNormals();
       return geo;
     };
+    // 紡錘形の筋肉（上腕二頭筋・大腿四頭筋など）：中央が一番太く、
+    // 腱に向かって両端が細くすぼまる。楕円体だと「ソーセージ」のような
+    // 均一な太さになってしまうのに対し、これは実際の筋腹の形に近い。
+    // profileは中心(0)からの相対高さ。lenで全長、peakYで一番太い位置
+    // （0=中央、負=下寄り）、peakRで最大半径を指定する。
+    const fusiform = (len, peakR, peakY, segments) => {
+      const halfLen = len / 2;
+      const p = [
+        [0, halfLen],
+        [peakR * 0.35, halfLen - len * 0.14],
+        [peakR * 0.85, peakY + len * 0.14],
+        [peakR,        peakY],
+        [peakR * 0.82, peakY - len * 0.16],
+        [peakR * 0.32, -halfLen + len * 0.10],
+        [0, -halfLen],
+      ];
+      return latheGeo(p, segments || 20);
+    };
+    // 扁平に潰した紡錘形（広背筋・僧帽筋のような「面」の筋肉に、少しだけ
+    // 立体感を持たせる時に使う）。
+    const flatFusiform = (len, peakR, peakY, flatten, segments) => {
+      const geo = fusiform(len, peakR, peakY, segments);
+      geo.scale(1, 1, flatten);
+      geo.computeVertexNormals();
+      return geo;
+    };
 
     // ============ 芯（体幹・骨盤・首・頭）— 1本の回転体で滑らかに ============
     // 肩幅→胸→ウエスト→腰→股までを1本のLatheGeometryにすることで、
-    // パーツの継ぎ目そのものを無くしている。
+    // パーツの継ぎ目そのものを無くしている。2026-09-19後半、「丸すぎる」
+    // という指摘を受けてウエストを絞り、肩と骨盤の差を出して
+    // アスレチックなV字シルエットに調整した（円柱に近い前バージョンより
+    // 全体の半径も一回り絞ってある）。
     const torsoProfile = [
-      [0.00, 2.06], [0.115, 2.04], [0.135, 1.98],
-      [0.205, 1.90],
-      [0.225, 1.74], [0.230, 1.55], [0.220, 1.38],
-      [0.195, 1.18],
-      [0.205, 1.00], [0.235, 0.82], [0.250, 0.62],
-      [0.230, 0.42], [0.175, 0.20], [0.095, 0.02],
+      [0.00, 2.06], [0.098, 2.04], [0.118, 1.98],
+      [0.205, 1.905],
+      [0.215, 1.72], [0.205, 1.50], [0.182, 1.32],
+      [0.158, 1.16],
+      [0.168, 1.00], [0.188, 0.82], [0.198, 0.62],
+      [0.183, 0.42], [0.148, 0.20], [0.078, 0.02],
       [0.00, -0.08],
     ];
-    add(latheGeo(torsoProfile, 40), 0, 0, 0);
+    add(latheGeo(torsoProfile, 44), 0, 0, 0);
 
-    const neckProfile = [[0.00,0.30],[0.095,0.29],[0.105,0.10],[0.10,0.0],[0.00,0.0]];
+    const neckProfile = [[0.00,0.30],[0.088,0.29],[0.098,0.10],[0.094,0.0],[0.00,0.0]];
     add(latheGeo(neckProfile, 32), 0, 2.06, 0);
 
     // 頭：楕円体を横に少しだけ長くする（卵形）。真球よりマネキンらしい。
-    add(bump(0.34, 0.40, 0.36), 0, 2.46, 0);
+    // 体をスリムにした分、相対的に大きく見えないよう一回り小さくした。
+    add(bump(0.30, 0.365, 0.32), 0, 2.44, 0);
 
-    // ============ 筋肉の膨らみ（前面） ============
-    add(bump(0.155, 0.135, 0.10), -0.135, 1.63, 0.135, "chest");
-    add(bump(0.155, 0.135, 0.10),  0.135, 1.63, 0.135, "chest");
-    add(bump(0.135, 0.20, 0.085), 0, 1.10, 0.17, "abs");
-    add(bump(0.055, 0.28, 0.075), -0.20, 1.10, 0.13, "obliques");
-    add(bump(0.055, 0.28, 0.075),  0.20, 1.10, 0.13, "obliques");
+    // ============ 筋肉（前面） ============
+    // 大胸筋：真ん中（胸骨側）が厚く、脇に向かって薄くすぼまる「扇形」。
+    // 左右非対称の紡錘形を横倒しにして表現し、奥行きも浅く潰す。
+    [-1, 1].forEach(s => {
+      const chestGeo = fusiform(0.30, 0.085, 0.02, 18);
+      chestGeo.scale(1, 1, 0.62);   // 奥行きを浅く
+      chestGeo.computeVertexNormals();
+      const m = add(chestGeo, s * 0.145, 1.62, 0.145, "chest");
+      m.rotation.z = s * (Math.PI / 2 - 0.32);   // 胸骨側が高く、脇側が低い斜めの向き
+      m.rotation.x = 0.18;
+    });
 
-    // ============ 筋肉の膨らみ（背面） ============
-    add(bump(0.24, 0.14, 0.10), 0, 1.86, -0.14, "traps");
-    add(bump(0.135, 0.22, 0.09), -0.155, 1.42, -0.155, "lats");
-    add(bump(0.135, 0.22, 0.09),  0.155, 1.42, -0.155, "lats");
-    add(bump(0.135, 0.14, 0.08), 0, 0.98, -0.155, "lower_back");
-    add(bump(0.145, 0.155, 0.135), -0.135, 0.44, -0.14, "glutes");
-    add(bump(0.145, 0.155, 0.135),  0.135, 0.44, -0.14, "glutes");
+    // 腹筋：1枚の塊ではなく2列×3段の小さな膨らみに分け、腹直筋の分節を表現。
+    for (let row = 0; row < 3; row++){
+      const y = 1.28 - row * 0.135;
+      const rz = 0.135 - row * 0.006;
+      [-1, 1].forEach(s => {
+        add(bump(0.058, 0.058, 0.058), s * 0.062, y, rz, "abs");
+      });
+    }
+    // 腹斜筋：脇腹の細く縦長な帯。
+    [-1, 1].forEach(s => {
+      const obGeo = fusiform(0.34, 0.05, -0.02, 16);
+      obGeo.scale(1, 1, 0.55);
+      obGeo.computeVertexNormals();
+      const m = add(obGeo, s * 0.185, 1.07, 0.105, "obliques");
+      m.rotation.x = 0.12; m.rotation.z = s * 0.1;
+    });
+
+    // ============ 筋肉（背面） ============
+    // 僧帽筋：首の付け根から肩甲骨にかけて広がる、扁平な菱形。
+    {
+      const trapsGeo = bump(0.235, 0.155, 0.095);
+      trapsGeo.scale(1, 1, 1);
+      add(trapsGeo, 0, 1.83, -0.13, "traps");
+    }
+    // 広背筋：上が広く脇腹に向かって細くなる「翼」形。紡錘形を斜めに。
+    [-1, 1].forEach(s => {
+      const latsGeo = flatFusiform(0.42, 0.115, 0.10, 0.55, 18);
+      const m = add(latsGeo, s * 0.145, 1.38, -0.155, "lats");
+      m.rotation.z = s * 0.22;
+    });
+    add(bump(0.135, 0.115, 0.075), 0, 0.97, -0.15, "lower_back");
+    // 大臀筋：解剖学的にも丸みの強い筋肉なので、他よりは球形を残しつつ、
+    // 奥行きだけ抑えて「貼りついた丸み」にする。
+    add(bump(0.145, 0.155, 0.115), -0.135, 0.44, -0.135, "glutes");
+    add(bump(0.145, 0.155, 0.115),  0.135, 0.44, -0.135, "glutes");
 
     [-1, 1].forEach(s => {
       // ---- 肩・腕 ----
-      add(bump(0.115, 0.12, 0.115), s * 0.30, 1.87, 0.085, "delts_front");
-      add(bump(0.125, 0.13, 0.125), s * 0.335, 1.89, 0, "delts_side");
-      add(bump(0.115, 0.12, 0.115), s * 0.30, 1.87, -0.10, "delts_rear");
+      // 三角筋は前部・中部・後部が肩を包むように配置される。奥行きを
+      // 抑えた小さめのドームにして「団子」感を減らす。
+      add(bump(0.088, 0.10, 0.078), s * 0.255, 1.865, 0.068, "delts_front");
+      add(bump(0.10, 0.105, 0.095), s * 0.285, 1.885, 0, "delts_side");
+      add(bump(0.088, 0.10, 0.078), s * 0.255, 1.865, -0.078, "delts_rear");
 
-      // 上腕・前腕は回転体を「芯」として置き、前後に色付き筋肉を重ねる
-      // （回転体自体は色分けの対象外＝muscleIdを渡さない）。
-      const upperArmProfile = [[0.00,0.02],[0.105,0.0],[0.11,-0.18],[0.095,-0.36],[0.08,-0.50],[0.00,-0.52]];
-      add(latheGeo(upperArmProfile, 28), s * 0.365, 1.72, 0);
-      add(bump(0.085, 0.19, 0.06), s * 0.365, 1.50, 0.055, "biceps");
-      add(bump(0.085, 0.19, 0.06), s * 0.365, 1.50, -0.06, "triceps");
+      // 上腕：回転体を「芯」として置き、その前後に紡錘形の二頭筋・三頭筋を
+      // 重ねる（回転体自体は色分けの対象外＝muscleIdを渡さない）。
+      const upperArmProfile = [[0.00,0.02],[0.088,0.0],[0.092,-0.18],[0.08,-0.36],[0.066,-0.50],[0.00,-0.52]];
+      add(latheGeo(upperArmProfile, 24), s * 0.31, 1.70, 0);
+      const bicepsGeo = fusiform(0.34, 0.062, 0.03, 16); bicepsGeo.scale(1,1,0.68); bicepsGeo.computeVertexNormals();
+      add(bicepsGeo, s * 0.31, 1.49, 0.048, "biceps");
+      const tricepsGeo = fusiform(0.34, 0.062, -0.02, 16); tricepsGeo.scale(1,1,0.68); tricepsGeo.computeVertexNormals();
+      add(tricepsGeo, s * 0.31, 1.49, -0.05, "triceps");
 
-      const forearmProfile = [[0.00,0.02],[0.085,0.0],[0.078,-0.20],[0.062,-0.40],[0.05,-0.48],[0.00,-0.49]];
-      add(latheGeo(forearmProfile, 28), s * 0.375, 1.18, 0);
-      add(bump(0.062, 0.19, 0.062), s * 0.375, 0.99, 0, "forearms");
+      const forearmProfile = [[0.00,0.02],[0.072,0.0],[0.066,-0.20],[0.053,-0.40],[0.043,-0.48],[0.00,-0.49]];
+      add(latheGeo(forearmProfile, 24), s * 0.32, 1.17, 0);
+      const forearmMuscleGeo = fusiform(0.30, 0.058, 0.06, 16); forearmMuscleGeo.scale(1,1,0.72); forearmMuscleGeo.computeVertexNormals();
+      add(forearmMuscleGeo, s * 0.32, 0.99, 0, "forearms");
 
-      add(bump(0.055, 0.075, 0.035), s * 0.38, 0.62, 0);  // 手
+      add(bump(0.047, 0.065, 0.030), s * 0.325, 0.63, 0);  // 手
 
       // ---- 脚 ----
-      const thighProfile = [[0.00,0.02],[0.165,0.0],[0.175,-0.25],[0.16,-0.55],[0.135,-0.78],[0.115,-0.85],[0.00,-0.86]];
-      add(latheGeo(thighProfile, 32), s * 0.155, 0.30, 0);
-      add(bump(0.115, 0.24, 0.10), s * 0.155, 0.02, 0.075, "quads");
-      add(bump(0.115, 0.24, 0.10), s * 0.155, 0.02, -0.09, "hamstrings");
-      add(bump(0.07, 0.24, 0.065), s * 0.075, 0.02, 0, "adductors");
+      const thighProfile = [[0.00,0.02],[0.145,0.0],[0.155,-0.25],[0.14,-0.55],[0.118,-0.78],[0.10,-0.85],[0.00,-0.86]];
+      add(latheGeo(thighProfile, 28), s * 0.135, 0.30, 0);
+      const quadGeo = fusiform(0.72, 0.10, 0.10, 18); quadGeo.scale(1,1,0.72); quadGeo.computeVertexNormals();
+      add(quadGeo, s * 0.135, -0.06, 0.068, "quads");
+      const hamGeo = fusiform(0.68, 0.10, 0.04, 18); hamGeo.scale(1,1,0.72); hamGeo.computeVertexNormals();
+      add(hamGeo, s * 0.135, -0.06, -0.078, "hamstrings");
+      const addGeo = fusiform(0.62, 0.062, 0.06, 14); addGeo.scale(1,1,0.75); addGeo.computeVertexNormals();
+      add(addGeo, s * 0.062, -0.06, 0, "adductors");
 
-      const calfProfile = [[0.00,0.02],[0.115,0.0],[0.105,-0.22],[0.075,-0.45],[0.05,-0.60],[0.00,-0.61]];
-      add(latheGeo(calfProfile, 32), s * 0.155, -0.55, 0);
-      add(bump(0.078, 0.20, 0.078), s * 0.155, -0.78, -0.03, "calves");
+      const calfProfile = [[0.00,0.02],[0.098,0.0],[0.09,-0.22],[0.065,-0.45],[0.044,-0.60],[0.00,-0.61]];
+      add(latheGeo(calfProfile, 28), s * 0.135, -0.55, 0);
+      // 腓腹筋：ふくらはぎの上寄りで一番膨らみ、アキレス腱に向けて
+      // 急に細くなる——ここは特に「紡錘形」効果が分かりやすい部位。
+      const calfGeo = fusiform(0.46, 0.072, 0.09, 16); calfGeo.scale(1,1,0.78); calfGeo.computeVertexNormals();
+      add(calfGeo, s * 0.135, -0.80, -0.028, "calves");
 
       // 足（甲を少し盛り上げた滑らかなくさび形）
       // ふくらはぎの下端(y = -0.55 - 0.61 = -1.16)にきちんと繋がる位置に置く
       // （2026-09-19、当初 -1.62 に置いてしまい足が宙に浮いていた不具合を
       // 実機スクリーンショットで発見・修正）。
-      const footProfile = [[0.00,0.0],[0.075,0.0],[0.085,-0.04],[0.065,-0.09],[0.00,-0.10]];
-      const foot = add(latheGeo(footProfile, 24), s * 0.155, -1.14, 0.11);
-      foot.rotation.x = Math.PI / 2; foot.scale.set(1, 2.1, 1);
+      const footProfile = [[0.00,0.0],[0.066,0.0],[0.075,-0.035],[0.058,-0.08],[0.00,-0.09]];
+      const foot = add(latheGeo(footProfile, 24), s * 0.135, -1.14, 0.10);
+      foot.rotation.x = Math.PI / 2; foot.scale.set(1, 2.0, 1);
     });
 
     BODY.group = group;
