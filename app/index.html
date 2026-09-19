@@ -154,6 +154,47 @@
   .legend{ display:flex; flex-wrap:wrap; gap:12px; margin-bottom:12px; font-size:12px; color:var(--ink-dim); }
   .legend span{ display:inline-flex; align-items:center; gap:5px; }
 
+  /* ---- トレログ：種目ピッカー・人体図・集計（2026-09-19） ---- */
+  .part-tabs{ display:flex; flex-wrap:wrap; gap:5px; margin-bottom:8px; }
+  .part-tabs button{
+    border:1px solid var(--border); background:var(--surface-2); color:var(--ink-dim);
+    font-size:11.5px; padding:5px 10px; border-radius:999px; cursor:pointer;
+    font-family:"Oswald",sans-serif; letter-spacing:.02em;
+  }
+  .part-tabs button.active{ background:var(--strength); color:#fff; border-color:var(--strength); }
+  .ex-buttons{ display:flex; flex-wrap:wrap; gap:5px; margin-bottom:8px; max-height:132px; overflow-y:auto; }
+  .ex-buttons button{
+    border:1px solid var(--border); background:var(--surface); color:var(--ink);
+    font-size:11.5px; padding:5px 9px; border-radius:7px; cursor:pointer; text-align:left;
+  }
+  .ex-buttons button.active{ background:var(--strength-soft); border-color:var(--strength); color:var(--strength); font-weight:600; }
+  .last-hint{ font-size:12px; color:var(--ink-dim); margin:-4px 0 10px; min-height:1.2em; }
+  .last-hint button{
+    border:none; background:var(--strength-soft); color:var(--strength); border-radius:6px;
+    font-size:11px; padding:3px 8px; margin-left:6px; cursor:pointer;
+  }
+
+  .body-wrap{ display:flex; justify-content:center; gap:6px; }
+  .body-wrap svg{ width:100%; max-width:320px; height:auto; }
+  .body-wrap .m{ stroke:var(--border); stroke-width:1; transition:fill .2s; cursor:default; }
+  .body-wrap .base{ fill:var(--surface-2); stroke:var(--border); stroke-width:1; }
+  .body-wrap .lbl{ fill:var(--ink-dim); font-size:9px; font-family:"Work Sans",sans-serif; text-anchor:middle; }
+  .muscle-legend{ display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; font-size:11.5px; }
+  .muscle-legend .ml{ display:inline-flex; align-items:center; gap:5px; color:var(--ink-dim); }
+  .muscle-legend .sw{ width:12px; height:12px; border-radius:3px; display:inline-block; }
+
+  .adh-week{ display:grid; grid-template-columns:repeat(7,1fr); gap:5px; }
+  .adh-day{ text-align:center; padding:8px 2px; border-radius:8px; border:1px solid var(--border); background:var(--surface-2); }
+  .adh-day .dw{ font-size:10.5px; color:var(--ink-dim); }
+  .adh-day .mk{ font-size:16px; line-height:1.3; }
+  .adh-day.done{ background:var(--shift-soft); border-color:var(--shift); }
+  .adh-day.missed{ background:var(--strength-soft); border-color:var(--strength); }
+  .adh-day.future{ opacity:.55; }
+  .stat-row{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-top:12px; }
+  .stat{ background:var(--surface-2); border:1px solid var(--border); border-radius:9px; padding:9px; text-align:center; }
+  .stat .v{ font-family:"IBM Plex Mono",monospace; font-size:17px; font-weight:600; color:var(--ink); }
+  .stat .k{ font-size:10.5px; color:var(--ink-dim); margin-top:2px; }
+
   /* ---- スケジュールタブ（Googleカレンダー風、2026-09-19） ---- */
   .sched-toolbar{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; flex-wrap:wrap; }
   .view-switch{ display:flex; background:var(--surface-2); border:1px solid var(--border); border-radius:9px; padding:3px; }
@@ -490,15 +531,13 @@
         <form id="form-strength">
           <div class="field"><label for="s-date">日付</label><input type="date" id="s-date" required></div>
           <div class="field">
-            <label for="s-exercise">種目</label>
-            <input type="text" id="s-exercise" list="exercise-list" placeholder="ベンチプレス" required>
-            <datalist id="exercise-list">
-              <option value="ベンチプレス"><option value="スクワット"><option value="デッドリフト">
-              <option value="ショルダープレス"><option value="懸垂"><option value="バーベルロウ">
-              <option value="ラットプルダウン"><option value="レッグプレス"><option value="アームカール">
-              <option value="ディップス">
-            </datalist>
+            <label>種目</label>
+            <div class="part-tabs" id="part-tabs"></div>
+            <div class="ex-buttons" id="ex-buttons"></div>
+            <input type="text" id="s-exercise" list="exercise-list" placeholder="種目を選ぶか、直接入力" required>
+            <datalist id="exercise-list"></datalist>
           </div>
+          <div class="last-hint" id="s-last-hint"></div>
           <div class="row3">
             <div class="field"><label for="s-weight">重量(kg)</label><input type="number" id="s-weight" step="0.5" min="0" required></div>
             <div class="field"><label for="s-reps">回数</label><input type="number" id="s-reps" step="1" min="1" required></div>
@@ -526,6 +565,23 @@
         </form>
       </div>
     </div>
+    <div class="card">
+      <h2>鍛えている部位<span class="tag" id="body-mode-tag"></span></h2>
+      <div class="metric-toggle" id="body-range-toggle">
+        <button data-range="selected" class="active">選択中の種目</button>
+        <button data-range="7">直近7日</button>
+        <button data-range="30">直近30日</button>
+      </div>
+      <div class="body-wrap" id="body-wrap"></div>
+      <div class="muscle-legend" id="muscle-legend"></div>
+    </div>
+
+    <div class="card">
+      <h2>今週のトレーニング</h2>
+      <div id="adherence-week"><p class="empty">まだ同期されていません。</p></div>
+      <div class="stat-row" id="train-stats"></div>
+    </div>
+
     <div class="card">
       <h2>最近の記録</h2>
       <ul class="list" id="recent-train-list"><li class="empty">まだ記録がありません。</li></ul>
@@ -715,6 +771,9 @@
     const result = await fetchDashboardSnap();
     if (result === undefined) return; // フェッチ自体が失敗（バナー表示済み）
     const data = result.row;
+    // トレログの「今週のトレーニング」は予定(health)をここのスナップショット
+    // から読むので、スナップショットが届いた時点で描き直す。
+    renderAdherenceAndStats();
     const snap = data ? data.data : null;
     document.getElementById("dash-updated").textContent = data ? timeAgoLabel(data.updated_at) : "";
 
@@ -1361,10 +1420,276 @@
   let strengthChartInst = null, cardioChartInst = null;
   let trainInited = false;
 
+  // ---- 種目カタログ（2026-09-19追加） ----
+  // 各種目がどの筋肉に効くかを primary（主働筋）／secondary（補助筋）で
+  // 持つ。人体図の色付けと部位別バランス集計の両方がこれを参照する。
+  const MUSCLES = {
+    chest:"大胸筋", delts_front:"三角筋前部", delts_side:"三角筋中部", delts_rear:"三角筋後部",
+    biceps:"上腕二頭筋", triceps:"上腕三頭筋", forearms:"前腕", abs:"腹直筋", obliques:"腹斜筋",
+    traps:"僧帽筋", lats:"広背筋", lower_back:"脊柱起立筋", glutes:"大臀筋",
+    quads:"大腿四頭筋", hamstrings:"ハムストリング", calves:"下腿三頭筋", adductors:"内転筋",
+  };
+  const EXERCISES = [
+    // 胸
+    {n:"ベンチプレス", part:"胸", p:["chest"], s:["delts_front","triceps"]},
+    {n:"インクラインベンチプレス", part:"胸", p:["chest","delts_front"], s:["triceps"]},
+    {n:"ダンベルプレス", part:"胸", p:["chest"], s:["delts_front","triceps"]},
+    {n:"ダンベルフライ", part:"胸", p:["chest"], s:["delts_front"]},
+    {n:"チェストプレス", part:"胸", p:["chest"], s:["triceps","delts_front"]},
+    {n:"ペックフライ", part:"胸", p:["chest"], s:[]},
+    {n:"ディップス", part:"胸", p:["chest","triceps"], s:["delts_front"]},
+    {n:"腕立て伏せ", part:"胸", p:["chest"], s:["triceps","delts_front","abs"]},
+    // 背中
+    {n:"デッドリフト", part:"背中", p:["lower_back","glutes","hamstrings"], s:["traps","lats","forearms"]},
+    {n:"ラットプルダウン", part:"背中", p:["lats"], s:["biceps","traps"]},
+    {n:"懸垂", part:"背中", p:["lats"], s:["biceps","forearms"]},
+    {n:"ベントオーバーロウ", part:"背中", p:["lats","traps"], s:["biceps","lower_back"]},
+    {n:"ダンベルロウ", part:"背中", p:["lats"], s:["biceps","traps"]},
+    {n:"シーテッドロウ", part:"背中", p:["lats","traps"], s:["biceps"]},
+    {n:"プルオーバー", part:"背中", p:["lats"], s:["chest","triceps"]},
+    {n:"バックエクステンション", part:"背中", p:["lower_back"], s:["glutes","hamstrings"]},
+    {n:"シュラッグ", part:"背中", p:["traps"], s:["forearms"]},
+    // 肩
+    {n:"ショルダープレス", part:"肩", p:["delts_front","delts_side"], s:["triceps","traps"]},
+    {n:"サイドレイズ", part:"肩", p:["delts_side"], s:["traps"]},
+    {n:"フロントレイズ", part:"肩", p:["delts_front"], s:[]},
+    {n:"リアレイズ", part:"肩", p:["delts_rear"], s:["traps"]},
+    {n:"アップライトロウ", part:"肩", p:["delts_side","traps"], s:["biceps"]},
+    {n:"フェイスプル", part:"肩", p:["delts_rear","traps"], s:[]},
+    // 腕
+    {n:"バーベルカール", part:"腕", p:["biceps"], s:["forearms"]},
+    {n:"ダンベルカール", part:"腕", p:["biceps"], s:["forearms"]},
+    {n:"ハンマーカール", part:"腕", p:["biceps","forearms"], s:[]},
+    {n:"プリーチャーカール", part:"腕", p:["biceps"], s:[]},
+    {n:"トライセプスエクステンション", part:"腕", p:["triceps"], s:[]},
+    {n:"ケーブルプレスダウン", part:"腕", p:["triceps"], s:[]},
+    {n:"ナローベンチプレス", part:"腕", p:["triceps","chest"], s:["delts_front"]},
+    {n:"キックバック", part:"腕", p:["triceps"], s:[]},
+    {n:"リストカール", part:"腕", p:["forearms"], s:[]},
+    // 脚
+    {n:"スクワット", part:"脚", p:["quads","glutes"], s:["hamstrings","lower_back","adductors"]},
+    {n:"フロントスクワット", part:"脚", p:["quads"], s:["glutes","abs"]},
+    {n:"レッグプレス", part:"脚", p:["quads","glutes"], s:["hamstrings"]},
+    {n:"レッグエクステンション", part:"脚", p:["quads"], s:[]},
+    {n:"レッグカール", part:"脚", p:["hamstrings"], s:[]},
+    {n:"ルーマニアンデッドリフト", part:"脚", p:["hamstrings","glutes"], s:["lower_back"]},
+    {n:"ランジ", part:"脚", p:["quads","glutes"], s:["hamstrings","adductors"]},
+    {n:"ブルガリアンスクワット", part:"脚", p:["quads","glutes"], s:["hamstrings"]},
+    {n:"ヒップスラスト", part:"脚", p:["glutes"], s:["hamstrings"]},
+    {n:"カーフレイズ", part:"脚", p:["calves"], s:[]},
+    {n:"アダクション", part:"脚", p:["adductors"], s:[]},
+    // 体幹
+    {n:"プランク", part:"体幹", p:["abs"], s:["obliques","lower_back"]},
+    {n:"クランチ", part:"体幹", p:["abs"], s:[]},
+    {n:"レッグレイズ", part:"体幹", p:["abs"], s:["obliques"]},
+    {n:"アブローラー", part:"体幹", p:["abs"], s:["lats","obliques"]},
+    {n:"サイドプランク", part:"体幹", p:["obliques"], s:["abs"]},
+    {n:"ロシアンツイスト", part:"体幹", p:["obliques"], s:["abs"]},
+    {n:"ヒップリフト", part:"体幹", p:["glutes"], s:["hamstrings","abs"]},
+  ];
+  const PARTS = ["胸","背中","肩","腕","脚","体幹"];
+  const exerciseByName = Object.fromEntries(EXERCISES.map(e => [e.n, e]));
+
   document.getElementById("s-date").value = new Date().toISOString().slice(0,10);
   document.getElementById("c-date").value = new Date().toISOString().slice(0,10);
   const rpeInput = document.getElementById("s-rpe");
   rpeInput.addEventListener("input", () => { document.getElementById("s-rpe-readout").textContent = rpeInput.value; });
+
+  // ---- 人体図（正面・背面の簡易マッスルマップ） ----
+  // 解剖学的に厳密な図ではなく「どこに効いているか」が一目で分かることを
+  // 目的にした簡略図。各パーツに data-muscle を持たせ、JSから塗り分ける。
+  function bodySvg(){
+    const m = (id, shape) => shape.replace("<", `<`).replace(/^<(\w+)/, `<$1 class="m" data-muscle="${id}"`);
+    return `
+<svg viewBox="0 0 250 228" role="img" aria-label="鍛えている部位の人体図">
+  <!-- 正面 -->
+  <ellipse class="base" cx="60" cy="18" rx="11" ry="13"/>
+  <rect class="base" x="55" y="29" width="10" height="9" rx="3"/>
+  ${m("traps", '<polygon points="46,44 60,34 74,44 70,46 50,46"/>')}
+  ${m("delts_front", '<ellipse cx="38" cy="50" rx="9" ry="10"/>')}
+  ${m("delts_front", '<ellipse cx="82" cy="50" rx="9" ry="10"/>')}
+  ${m("chest", '<rect x="45" y="44" width="14" height="20" rx="6"/>')}
+  ${m("chest", '<rect x="61" y="44" width="14" height="20" rx="6"/>')}
+  ${m("biceps", '<ellipse cx="33" cy="72" rx="7" ry="13"/>')}
+  ${m("biceps", '<ellipse cx="87" cy="72" rx="7" ry="13"/>')}
+  ${m("forearms", '<ellipse cx="29" cy="97" rx="6" ry="13"/>')}
+  ${m("forearms", '<ellipse cx="91" cy="97" rx="6" ry="13"/>')}
+  ${m("abs", '<rect x="51" y="66" width="18" height="32" rx="5"/>')}
+  ${m("obliques", '<rect x="44" y="68" width="6" height="27" rx="3"/>')}
+  ${m("obliques", '<rect x="70" y="68" width="6" height="27" rx="3"/>')}
+  ${m("quads", '<rect x="46" y="102" width="13" height="45" rx="6"/>')}
+  ${m("quads", '<rect x="61" y="102" width="13" height="45" rx="6"/>')}
+  ${m("adductors", '<rect x="56" y="104" width="8" height="26" rx="4"/>')}
+  ${m("calves", '<rect x="48" y="151" width="11" height="34" rx="5"/>')}
+  ${m("calves", '<rect x="61" y="151" width="11" height="34" rx="5"/>')}
+  <rect class="base" x="47" y="187" width="12" height="7" rx="3"/>
+  <rect class="base" x="61" y="187" width="12" height="7" rx="3"/>
+  <text class="lbl" x="60" y="210">正面</text>
+
+  <!-- 背面 -->
+  <ellipse class="base" cx="190" cy="18" rx="11" ry="13"/>
+  <rect class="base" x="185" y="29" width="10" height="9" rx="3"/>
+  ${m("traps", '<polygon points="174,46 190,34 206,46 201,64 179,64"/>')}
+  ${m("delts_rear", '<ellipse cx="168" cy="50" rx="9" ry="10"/>')}
+  ${m("delts_rear", '<ellipse cx="212" cy="50" rx="9" ry="10"/>')}
+  ${m("lats", '<polygon points="177,58 189,58 189,92 178,78"/>')}
+  ${m("lats", '<polygon points="203,58 191,58 191,92 202,78"/>')}
+  ${m("triceps", '<ellipse cx="163" cy="72" rx="7" ry="13"/>')}
+  ${m("triceps", '<ellipse cx="217" cy="72" rx="7" ry="13"/>')}
+  ${m("forearms", '<ellipse cx="159" cy="97" rx="6" ry="13"/>')}
+  ${m("forearms", '<ellipse cx="221" cy="97" rx="6" ry="13"/>')}
+  ${m("lower_back", '<rect x="181" y="80" width="18" height="18" rx="4"/>')}
+  ${m("glutes", '<ellipse cx="182" cy="110" rx="10" ry="9"/>')}
+  ${m("glutes", '<ellipse cx="198" cy="110" rx="10" ry="9"/>')}
+  ${m("hamstrings", '<rect x="176" y="120" width="13" height="40" rx="6"/>')}
+  ${m("hamstrings", '<rect x="191" y="120" width="13" height="40" rx="6"/>')}
+  ${m("calves", '<rect x="178" y="163" width="11" height="32" rx="5"/>')}
+  ${m("calves", '<rect x="191" y="163" width="11" height="32" rx="5"/>')}
+  <rect class="base" x="177" y="197" width="12" height="7" rx="3"/>
+  <rect class="base" x="191" y="197" width="12" height="7" rx="3"/>
+  <text class="lbl" x="190" y="215">背面</text>
+</svg>`;
+  }
+  document.getElementById("body-wrap").innerHTML = bodySvg();
+
+  let bodyRange = "selected";   // "selected" | "7" | "30"
+  document.getElementById("body-range-toggle").addEventListener("click", (e) => {
+    if (e.target.tagName !== "BUTTON") return;
+    bodyRange = e.target.dataset.range;
+    [...e.currentTarget.children].forEach(b => b.classList.toggle("active", b === e.target));
+    renderBody();
+  });
+
+  // 種目→筋肉の負荷スコア（primaryを1.0、secondaryを0.5で数える）
+  function muscleScores(){
+    const scores = {};
+    const add = (id, v) => { scores[id] = (scores[id] || 0) + v; };
+    if (bodyRange === "selected"){
+      const ex = exerciseByName[document.getElementById("s-exercise").value.trim()];
+      if (!ex) return { scores: {}, label: "種目を選ぶと、効く部位が色で表示されます" };
+      ex.p.forEach(id => add(id, 1));
+      ex.s.forEach(id => add(id, 0.5));
+      return { scores, label: ex.n };
+    }
+    const days = parseInt(bodyRange, 10);
+    const since = new Date(); since.setDate(since.getDate() - days);
+    const sinceStr = since.toISOString().slice(0,10);
+    let any = false;
+    strengthLogs.filter(l => l.date >= sinceStr).forEach(l => {
+      const ex = exerciseByName[l.exercise];
+      if (!ex) return;
+      any = true;
+      const vol = (l.weight_kg || 0) * (l.reps || 0) * (l.sets || 0);
+      ex.p.forEach(id => add(id, vol));
+      ex.s.forEach(id => add(id, vol * 0.5));
+    });
+    return { scores, label: any ? `直近${days}日の総ボリューム比` : `直近${days}日の記録がありません` };
+  }
+
+  function renderBody(){
+    const { scores, label } = muscleScores();
+    document.getElementById("body-mode-tag").textContent = label;
+    const max = Math.max(...Object.values(scores), 0);
+    document.querySelectorAll("#body-wrap .m").forEach(el => {
+      const v = scores[el.dataset.muscle] || 0;
+      const pct = max > 0 ? Math.round((v / max) * 100) : 0;
+      el.style.fill = pct === 0
+        ? "var(--surface-2)"
+        : `color-mix(in srgb, var(--strength) ${Math.max(pct, 12)}%, var(--surface-2))`;
+    });
+    const top = Object.entries(scores).sort((a,b) => b[1]-a[1]).slice(0,6);
+    document.getElementById("muscle-legend").innerHTML = top.length
+      ? top.map(([id, v]) => {
+          const pct = Math.max(Math.round((v / max) * 100), 12);
+          return `<span class="ml"><span class="sw" style="background:color-mix(in srgb, var(--strength) ${pct}%, var(--surface-2))"></span>${MUSCLES[id] || id}</span>`;
+        }).join("")
+      : "";
+  }
+
+  // ---- 種目ピッカー ----
+  let currentPart = PARTS[0];
+  document.getElementById("exercise-list").innerHTML = EXERCISES.map(e => `<option value="${e.n}">`).join("");
+  document.getElementById("part-tabs").innerHTML = PARTS.map(p =>
+    `<button type="button" data-part="${p}"${p===currentPart?' class="active"':''}>${p}</button>`).join("");
+  document.getElementById("part-tabs").addEventListener("click", (e) => {
+    if (e.target.tagName !== "BUTTON") return;
+    currentPart = e.target.dataset.part;
+    [...e.currentTarget.children].forEach(b => b.classList.toggle("active", b === e.target));
+    renderExerciseButtons();
+  });
+  function renderExerciseButtons(){
+    const cur = document.getElementById("s-exercise").value.trim();
+    document.getElementById("ex-buttons").innerHTML = EXERCISES.filter(e => e.part === currentPart)
+      .map(e => `<button type="button" data-ex="${e.n}"${e.n===cur?' class="active"':''}>${e.n}</button>`).join("");
+  }
+  document.getElementById("ex-buttons").addEventListener("click", (e) => {
+    if (e.target.tagName !== "BUTTON") return;
+    document.getElementById("s-exercise").value = e.target.dataset.ex;
+    onExerciseChanged();
+  });
+  document.getElementById("s-exercise").addEventListener("change", onExerciseChanged);
+
+  // 前回の重量・回数を出して、ワンタップで入れられるようにする
+  function onExerciseChanged(){
+    renderExerciseButtons();
+    if (bodyRange === "selected") renderBody();
+    const name = document.getElementById("s-exercise").value.trim();
+    const hint = document.getElementById("s-last-hint");
+    const last = strengthLogs.filter(l => l.exercise === name)
+      .sort((a,b) => b.date.localeCompare(a.date))[0];
+    if (!last){ hint.innerHTML = name ? "この種目は今回が初回です。" : ""; return; }
+    hint.innerHTML = `前回（${last.date.slice(5)}）: ${last.weight_kg}kg × ${last.reps}回 × ${last.sets}セット` +
+      `<button type="button" id="apply-last">前回の値を入れる</button>`;
+    document.getElementById("apply-last").addEventListener("click", () => {
+      document.getElementById("s-weight").value = last.weight_kg;
+      document.getElementById("s-reps").value = last.reps;
+      document.getElementById("s-sets").value = last.sets;
+    });
+  }
+  renderExerciseButtons();
+  renderBody();
+
+  // ---- 今週のトレーニング（予定との突き合わせ）と集計 ----
+  function renderAdherenceAndStats(){
+    const el = document.getElementById("adherence-week");
+    const snap = dashboardSnapCache ? dashboardSnapCache.data : null;
+    const healthEvents = ((snap && snap.calendar_events) || []).filter(e => e.family_type === "health");
+    const todayStr = ymd(new Date());
+    const weekStart = startOfWeek(new Date());
+    const days = Array.from({length:7}, (_,i) => addDays(weekStart, i));
+
+    if (!healthEvents.length){
+      el.innerHTML = '<p class="empty">トレーニング予定がまだ同期されていません。</p>';
+    } else {
+      el.innerHTML = `<div class="adh-week">` + days.map(d => {
+        const ds = ymd(d);
+        const planned = healthEvents.filter(e => e.date === ds);
+        const logged = strengthLogs.some(l => l.date === ds) || cardioLogs.some(l => l.date === ds);
+        let cls = "", mark = "·";
+        if (!planned.length){ mark = logged ? "✓" : "·"; if (logged) cls = "done"; }
+        else if (logged){ cls = "done"; mark = "✓"; }
+        else if (ds < todayStr){ cls = "missed"; mark = "×"; }
+        else { cls = "future"; mark = "◦"; }
+        return `<div class="adh-day ${cls}"><div class="dw">${SCHED_DOW[(d.getDay()+6)%7]}</div><div class="mk">${mark}</div></div>`;
+      }).join("") + `</div>`;
+    }
+
+    // 連続記録日数（今日か昨日から遡って、記録のある日が続いた数）
+    const logDates = new Set([...strengthLogs.map(l => l.date), ...cardioLogs.map(l => l.date)]);
+    let streak = 0;
+    let cursor = logDates.has(todayStr) ? new Date() : addDays(new Date(), -1);
+    while (logDates.has(ymd(cursor))){ streak++; cursor = addDays(cursor, -1); }
+
+    const monthPrefix = todayStr.slice(0,7);
+    const monthVolume = strengthLogs.filter(l => l.date.startsWith(monthPrefix))
+      .reduce((sum,l) => sum + (l.weight_kg||0)*(l.reps||0)*(l.sets||0), 0);
+    const weekCount = days.filter(d => logDates.has(ymd(d))).length;
+
+    document.getElementById("train-stats").innerHTML = `
+      <div class="stat"><div class="v">${weekCount}</div><div class="k">今週の実施日数</div></div>
+      <div class="stat"><div class="v">${streak}</div><div class="k">連続記録日数</div></div>
+      <div class="stat"><div class="v">${Math.round(monthVolume).toLocaleString("ja-JP")}</div><div class="k">今月の総ボリューム(kg)</div></div>`;
+  }
 
   function subscribeTrainLogs(){
     sb.from("strength_logs").select("*").order("date",{ascending:false}).limit(500).then(({data,error}) => {
@@ -1384,6 +1709,9 @@
   function onTrainDataChanged(){
     renderRecentTrain();
     populateExerciseSelect();
+    renderAdherenceAndStats();
+    if (bodyRange !== "selected") renderBody();
+    onExerciseChanged();
     if (panels.train.classList.contains("active")){ renderStrengthChart(); renderCardioChart(); renderCalendar(); }
   }
 
