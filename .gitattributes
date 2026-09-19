@@ -1,0 +1,4 @@
+# 改行コード変換によるgitの警告（"LF will be replaced by CRLF"）を止める。
+# この警告自体は無害だが、PowerShellの$ErrorActionPreference="Stop"下では
+# publish_github_pages.ps1を中断させる原因になっていた（2026-09-19判明）。
+* -text
