@@ -245,6 +245,9 @@
   }
   .evt-chip.strength{ background:var(--strength); } .evt-chip.shift{ background:var(--shift); }
   .evt-chip.goals{ background:var(--goals); } .evt-chip.personal{ background:var(--ink-dim); }
+  .evt-bar{ height:7px; border-radius:3px; flex:none; }
+  .evt-bar.pending{ opacity:.6; }
+  .mcal-cell{ min-height:64px; }
   .evt-chip.pending{ opacity:.65; border:1px dashed rgba(255,255,255,.7); }
   .evt-more{ font-size:10px; color:var(--ink-dim); padding-left:2px; }
 
@@ -473,6 +476,8 @@
         <span><span class="dot shift"></span>バイト</span>
         <span><span class="dot goals"></span>授業</span>
         <span><span class="dot personal"></span>私用</span>
+        <span><span class="dot" style="background:hsl(180,62%,50%)"></span>健康</span>
+        <span class="tag">同じ授業・予定は同じ色</span>
         <span class="tag" id="sched-updated"></span>
       </div>
 
@@ -846,7 +851,7 @@
         <div class="budget-nums"><span>使用額</span><span class="now">${fmtYen(spent)}${cap ? " / " + fmtYen(cap) : ""}</span></div>
         <div class="budget-bar"><div class="fill" style="width:${pct}%"></div></div>
         ${remaining != null ? `<div class="budget-nums"><span>残り</span><span class="now">${fmtYen(remaining)}</span></div>` : ""}
-        ${catRows ? `<details class="cat-details" open><summary>カテゴリ別内訳</summary><div class="cat-list">${catRows}</div></details>` : ""}`;
+        ${catRows ? `<details class="cat-details"><summary>カテゴリ別内訳</summary><div class="cat-list">${catRows}</div></details>` : ""}`;
     } else {
       budgetEl.innerHTML = '<p class="empty">まだ同期されていません。PC側の同期スクリプトの実行を待っています。</p>';
     }
@@ -907,8 +912,19 @@
   //      まだカレンダー未反映の予定。次回のPC側同期でGoogleカレンダーに
   //      登録されるまでの間、「同期待ち」として破線つきで表示する
   //      （追加した予定がその場で消えたように見えないようにするため）。
+  // 予定の色。種類ごとに色相の範囲を割り当て、その中で件名（授業名・予定名）
+  // から色相を決める——同じ授業は常に同じ色、違う授業は違う色になる。
+  const KIND_HUE = { assignment_due:[0,22], shift:[105,150], class:[205,285], personal:[28,62], health:[165,195] };
+  function eventColor(ev){
+    const r = KIND_HUE[ev.family_type] || [300,340];
+    let h = 0; const key = String(ev.title || "").replace(/[\s　]+/g,"");
+    for (let i=0;i<key.length;i++) h = (h*31 + key.charCodeAt(i)) >>> 0;
+    const hue = r[0] + (h % 1000) / 1000 * (r[1]-r[0]);
+    const light = ev.family_type === "class" ? 46 + (h>>10)%14 : 48 + (h>>10)%10;
+    return `hsl(${hue.toFixed(0)},${62 + (h>>14)%18}%,${light}%)`;
+  }
   const FAMILY_DOT_CLASS = { assignment_due: "strength", shift: "shift", class: "goals", personal: "personal" };
-  const FAMILY_LABEL = { assignment_due: "締切", shift: "バイト", class: "授業", personal: "私用" };
+  const FAMILY_LABEL = { assignment_due: "締切", shift: "バイト", class: "授業", personal: "私用", health: "健康" };
   const SCHED_DOW = ["月","火","水","木","金","土","日"];
   // 0時〜24時のフル表示（2026-09-19、ユーザー要望で6時始まりから変更）。
   // 全部見えるかわりに深夜帯の空白から始まってしまうので、描画後に
@@ -1002,12 +1018,11 @@
       const cell = document.createElement("div");
       cell.className = "mcal-cell" + (dateStr===today ? " today" : "") + (dateStr===schedSelectedDate ? " selected" : "");
       const dayEvents = schedEventsByDate[dateStr] || [];
-      const shown = dayEvents.slice(0,3).map(ev => {
-        const cls = FAMILY_DOT_CLASS[ev.family_type] || "personal";
-        const t = ev.start_time ? ev.start_time.replace(/^0/,"") + " " : "";
-        return `<div class="evt-chip ${cls}${ev.pending ? " pending" : ""}">${escapeHtml(t + ev.title)}</div>`;
-      }).join("");
-      const more = dayEvents.length > 3 ? `<div class="evt-more">他${dayEvents.length-3}件</div>` : "";
+      const MAXB = 5;
+      const shown = dayEvents.slice(0,MAXB).map(ev =>
+        `<div class="evt-bar${ev.pending ? " pending" : ""}" style="background:${eventColor(ev)}" title="${escapeHtml((ev.start_time ? ev.start_time+" " : "") + ev.title)}"></div>`
+      ).join("");
+      const more = dayEvents.length > MAXB ? `<div class="evt-more">+${dayEvents.length-MAXB}</div>` : "";
       cell.innerHTML = `<div class="dnum">${d}</div>${shown}${more}`;
       cell.addEventListener("click", () => selectSchedDate(dateStr));
       grid.appendChild(cell);
@@ -1040,6 +1055,7 @@
       (schedEventsByDate[ymd(d)] || []).filter(ev => !ev.start_time).forEach(ev => {
         const chip = document.createElement("div");
         chip.className = `evt-chip ${FAMILY_DOT_CLASS[ev.family_type] || "personal"}${ev.pending ? " pending" : ""}`;
+        chip.style.background = eventColor(ev);
         chip.textContent = (dayCount === 7 ? `${d.getMonth()+1}/${d.getDate()} ` : "") + ev.title;
         chip.addEventListener("click", () => selectSchedDate(ymd(d)));
         alldayEl.appendChild(chip);
@@ -1073,6 +1089,7 @@
         if (e <= TG_START_HOUR*60) return;
         const el = document.createElement("div");
         el.className = `tg-event ${FAMILY_DOT_CLASS[ev.family_type] || "personal"}${ev.pending ? " pending" : ""}`;
+        el.style.background = eventColor(ev);
         el.style.top = `${((s - TG_START_HOUR*60) / totalMin) * 100}%`;
         el.style.height = `${Math.max(((e - s) / totalMin) * 100, 2.2)}%`;
         el.style.left = `${(lane / lanes) * 100}%`;
@@ -1146,6 +1163,7 @@
     items.forEach(ev => {
       const d = document.createElement("div");
       d.className = "dd-item " + (FAMILY_DOT_CLASS[ev.family_type] || "personal");
+      d.style.borderLeftColor = eventColor(ev);
       const time = ev.start_time ? `${ev.start_time}${ev.end_time ? "–"+ev.end_time : ""} / ` : "";
       const amount = ev.amount ? `（${fmtYen(ev.amount)}）` : "";
       const pendingMark = ev.pending ? '<span class="note" style="display:inline;">（同期待ち）</span>' : "";
