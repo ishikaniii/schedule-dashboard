@@ -1594,7 +1594,7 @@
       new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, depthWrite: false })
     );
     shadowBlob.rotation.x = -Math.PI / 2;
-    shadowBlob.position.y = -1.79;
+    shadowBlob.position.y = -1.3;
     group.add(shadowBlob);
 
     const MANNEQUIN = 0xdcd6c7;  // マットなアイボリー（マネキン基調色）
@@ -1637,8 +1637,8 @@
     add(bump(0.34, 0.40, 0.36), 0, 2.46, 0);
 
     // ============ 筋肉の膨らみ（前面） ============
-    add(bump(0.155, 0.135, 0.10), -0.135, 1.63, 0.175, "chest");
-    add(bump(0.155, 0.135, 0.10),  0.135, 1.63, 0.175, "chest");
+    add(bump(0.155, 0.135, 0.10), -0.135, 1.63, 0.135, "chest");
+    add(bump(0.155, 0.135, 0.10),  0.135, 1.63, 0.135, "chest");
     add(bump(0.135, 0.20, 0.085), 0, 1.10, 0.17, "abs");
     add(bump(0.055, 0.28, 0.075), -0.20, 1.10, 0.13, "obliques");
     add(bump(0.055, 0.28, 0.075),  0.20, 1.10, 0.13, "obliques");
@@ -1682,9 +1682,12 @@
       add(bump(0.078, 0.20, 0.078), s * 0.155, -0.78, -0.03, "calves");
 
       // 足（甲を少し盛り上げた滑らかなくさび形）
-      const footProfile = [[0.00,0.0],[0.065,0.0],[0.075,-0.03],[0.06,-0.07],[0.00,-0.08]];
-      const foot = add(latheGeo(footProfile, 24), s * 0.155, -1.62, 0.12);
-      foot.rotation.x = Math.PI / 2; foot.scale.set(1, 1.9, 1);
+      // ふくらはぎの下端(y = -0.55 - 0.61 = -1.16)にきちんと繋がる位置に置く
+      // （2026-09-19、当初 -1.62 に置いてしまい足が宙に浮いていた不具合を
+      // 実機スクリーンショットで発見・修正）。
+      const footProfile = [[0.00,0.0],[0.075,0.0],[0.085,-0.04],[0.065,-0.09],[0.00,-0.10]];
+      const foot = add(latheGeo(footProfile, 24), s * 0.155, -1.14, 0.11);
+      foot.rotation.x = Math.PI / 2; foot.scale.set(1, 2.1, 1);
     });
 
     BODY.group = group;
