@@ -811,7 +811,10 @@
   const FAMILY_DOT_CLASS = { assignment_due: "strength", shift: "shift", class: "goals", personal: "personal" };
   const FAMILY_LABEL = { assignment_due: "締切", shift: "バイト", class: "授業", personal: "私用" };
   const SCHED_DOW = ["月","火","水","木","金","土","日"];
-  const TG_START_HOUR = 6, TG_END_HOUR = 24, TG_ROW_PX = 38;
+  // 0時〜24時のフル表示（2026-09-19、ユーザー要望で6時始まりから変更）。
+  // 全部見えるかわりに深夜帯の空白から始まってしまうので、描画後に
+  // 「その期間の最初の予定」（無ければ7時）までスクロールする。
+  const TG_START_HOUR = 0, TG_END_HOUR = 24, TG_ROW_PX = 38;
 
   let schedView = "month";            // "month" | "week" | "day"
   let schedAnchor = startOfDay(new Date());  // 表示中の期間の基準日
@@ -998,6 +1001,14 @@
       return `<div class="tg-colhead${isToday ? " today" : ""}">${SCHED_DOW[(d.getDay()+6)%7]} ${d.getDate()}</div>`;
     }).join("");
     headRow.style.display = dayCount === 7 ? "grid" : "none";
+
+    // 0時始まりにしたので、開いた直後に深夜の空白を見せないよう
+    // 「その期間で一番早い予定の1時間前」（予定が無ければ7:00）まで
+    // スクロールしておく。
+    const allStarts = days.flatMap(d =>
+      (schedEventsByDate[ymd(d)] || []).filter(ev => ev.start_time).map(ev => toMinutes(ev.start_time)));
+    const focusMin = allStarts.length ? Math.max(Math.min(...allStarts) - 60, 0) : 7*60;
+    document.querySelector(".tg-wrap").scrollTop = (focusMin / 60) * TG_ROW_PX;
   }
 
   // 重なる予定を横に並べるためのレーン割り当て（貪欲法）
