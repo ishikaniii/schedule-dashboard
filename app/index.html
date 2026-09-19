@@ -190,11 +190,14 @@
 
   <div id="status-banner" class="status-banner"></div>
 
+  <!-- タブ順序について(2026-09-19)：目標は今後何が追加されても常に一番最後
+       に置くこと（ユーザー指定）。新しいタブを増やすときはこのnav要素と、
+       下のpanels/TAB_ORDER（スワイプ用）両方に、目標より前へ挿入する。 -->
   <nav class="tabs">
     <button class="nav-btn active" data-tab="home">ホーム</button>
     <button class="nav-btn" data-tab="budget">家計簿</button>
-    <button class="nav-btn" data-tab="goals">目標</button>
     <button class="nav-btn" data-tab="train">トレログ</button>
+    <button class="nav-btn" data-tab="goals">目標</button>
   </nav>
 
   <!-- ============ ホーム ============ -->
@@ -396,6 +399,10 @@
   })();
 
   // ============ タブ ============
+  // 目標は今後タブが増えても常に一番最後（ユーザー指定、2026-09-19）。
+  // 新しいタブを追加するときはこの配列とnav要素の両方で「goals」の手前に
+  // 挿入すること。スワイプもこの並び順で前後する。
+  const TAB_ORDER = ["home", "budget", "train", "goals"];
   const tabButtons = document.querySelectorAll(".nav-btn");
   const panels = {
     home: document.getElementById("panel-home"),
@@ -404,13 +411,46 @@
     train: document.getElementById("panel-train"),
   };
   const loadedTabs = new Set();
-  tabButtons.forEach(btn => btn.addEventListener("click", () => {
-    tabButtons.forEach(b => b.classList.remove("active"));
-    btn.classList.add("active");
-    Object.values(panels).forEach(p => p.classList.remove("active"));
-    panels[btn.dataset.tab].classList.add("active");
-    loadTab(btn.dataset.tab);
-  }));
+
+  function activateTab(tab){
+    tabButtons.forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
+    Object.entries(panels).forEach(([name, p]) => p.classList.toggle("active", name === tab));
+    loadTab(tab);
+  }
+  tabButtons.forEach(btn => btn.addEventListener("click", () => activateTab(btn.dataset.tab)));
+
+  // ---- スワイプでタブ切り替え（2026-09-19追加、モバイル向け） ----
+  // 縦スクロールを阻害しないよう、明らかに横方向のジェスチャーの時だけ
+  // 発火させる（横移動が縦移動を十分上回り、かつ一定距離以上動いた場合の
+  // み）。preventDefaultは呼ばない＝通常のスクロールは常に妨げない。
+  (function initSwipe(){
+    const zone = document.querySelector(".wrap");
+    let startX = 0, startY = 0, tracking = false;
+    zone.addEventListener("touchstart", (e) => {
+      if (e.touches.length !== 1) return;
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      tracking = true;
+    }, { passive: true });
+    zone.addEventListener("touchend", (e) => {
+      if (!tracking) return;
+      tracking = false;
+      const dx = e.changedTouches[0].clientX - startX;
+      const dy = e.changedTouches[0].clientY - startY;
+      const SWIPE_MIN_X = 60;
+      if (Math.abs(dx) < SWIPE_MIN_X || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+      const current = tabButtons2Active();
+      const idx = TAB_ORDER.indexOf(current);
+      if (idx === -1) return;
+      const nextIdx = dx < 0 ? idx + 1 : idx - 1; // 左スワイプ=次のタブへ
+      if (nextIdx < 0 || nextIdx >= TAB_ORDER.length) return;
+      activateTab(TAB_ORDER[nextIdx]);
+    }, { passive: true });
+    function tabButtons2Active(){
+      const active = document.querySelector(".nav-btn.active");
+      return active ? active.dataset.tab : TAB_ORDER[0];
+    }
+  })();
 
   function escapeHtml(s){
     return (s == null ? "" : String(s)).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
