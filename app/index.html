@@ -159,7 +159,16 @@
   .budget-nums .now{ color:var(--ink); font-family:"IBM Plex Mono",monospace; font-weight:600; }
 
   /* カテゴリ別の内訳（旧スケジュールボードのメーター表示と同じ考え方、2026-09-19追加） */
-  .cat-list{ margin-top:14px; padding-top:12px; border-top:1px solid var(--border); display:flex; flex-direction:column; gap:10px; }
+  .cat-details{ margin-top:14px; padding-top:12px; border-top:1px solid var(--border); }
+  .cat-details summary{
+    cursor:pointer; list-style:none; display:flex; align-items:center; gap:.4em;
+    font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-dim);
+    font-family:"Oswald",sans-serif;
+  }
+  .cat-details summary::-webkit-details-marker{ display:none; }
+  .cat-details summary::before{ content:"▸"; display:inline-block; font-size:.9em; transition:transform .15s ease; }
+  .cat-details[open] summary::before{ transform:rotate(90deg); }
+  .cat-list{ margin-top:10px; display:flex; flex-direction:column; gap:10px; }
   .cat-row{ display:grid; grid-template-columns:4.6rem 1fr auto; align-items:center; gap:10px; }
   .cat-label{ font-size:12.5px; color:var(--ink); }
   .cat-track{ position:relative; height:9px; border-radius:999px; overflow:hidden; background:var(--cardio-soft); }
@@ -572,7 +581,7 @@
         <div class="budget-nums"><span>使用額</span><span class="now">${fmtYen(spent)}${cap ? " / " + fmtYen(cap) : ""}</span></div>
         <div class="budget-bar"><div class="fill" style="width:${pct}%"></div></div>
         ${remaining != null ? `<div class="budget-nums"><span>残り</span><span class="now">${fmtYen(remaining)}</span></div>` : ""}
-        ${catRows ? `<div class="cat-list">${catRows}</div>` : ""}`;
+        ${catRows ? `<details class="cat-details" open><summary>カテゴリ別内訳</summary><div class="cat-list">${catRows}</div></details>` : ""}`;
     } else {
       budgetEl.innerHTML = '<p class="empty">まだ同期されていません。PC側の同期スクリプトの実行を待っています。</p>';
     }
