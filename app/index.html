@@ -1671,16 +1671,12 @@
     add(bump(0.30, 0.365, 0.32), 0, 2.44, 0);
 
     // ============ 筋肉（前面） ============
-    // 大胸筋：真ん中（胸骨側）が厚く、脇に向かって薄くすぼまる「扇形」。
-    // 左右非対称の紡錘形を横倒しにして表現し、奥行きも浅く潰す。
-    [-1, 1].forEach(s => {
-      const chestGeo = fusiform(0.30, 0.085, 0.02, 18);
-      chestGeo.scale(1, 1, 0.62);   // 奥行きを浅く
-      chestGeo.computeVertexNormals();
-      const m = add(chestGeo, s * 0.145, 1.62, 0.145, "chest");
-      m.rotation.z = s * (Math.PI / 2 - 0.32);   // 胸骨側が高く、脇側が低い斜めの向き
-      m.rotation.x = 0.18;
-    });
+    // 大胸筋：回転で「扇形」を狙ったところ、羽根のような不自然な向きに
+    // なる不具合が出た（2026-09-19、実機で発覚）。回転には頼らず、
+    // 楕円体を胸骨側に寄せて奥行きを浅く潰す方式に戻す——安全に
+    // 「体表に貼りついた薄い膨らみ」を再現できる。
+    add(bump(0.098, 0.088, 0.062), -0.128, 1.615, 0.155, "chest");
+    add(bump(0.098, 0.088, 0.062),  0.128, 1.615, 0.155, "chest");
 
     // 腹筋：1枚の塊ではなく2列×3段の小さな膨らみに分け、腹直筋の分節を表現。
     for (let row = 0; row < 3; row++){
@@ -1728,19 +1724,23 @@
 
       // 上腕：回転体を「芯」として置き、その前後に紡錘形の二頭筋・三頭筋を
       // 重ねる（回転体自体は色分けの対象外＝muscleIdを渡さない）。
+      // 体を絞った際に肩(delt)側の座標だけ調整して、腕の上端との間に
+      // 隙間が空いてしまっていた（2026-09-19、実機で発覚）。delt下端
+      // (約y=1.765〜1.78)にしっかり重なるよう、腕の位置を上げ、X位置も
+      // delt群の中心に合わせて寄せる。
       const upperArmProfile = [[0.00,0.02],[0.088,0.0],[0.092,-0.18],[0.08,-0.36],[0.066,-0.50],[0.00,-0.52]];
-      add(latheGeo(upperArmProfile, 24), s * 0.31, 1.70, 0);
+      add(latheGeo(upperArmProfile, 24), s * 0.275, 1.76, 0);
       const bicepsGeo = fusiform(0.34, 0.062, 0.03, 16); bicepsGeo.scale(1,1,0.68); bicepsGeo.computeVertexNormals();
-      add(bicepsGeo, s * 0.31, 1.49, 0.048, "biceps");
+      add(bicepsGeo, s * 0.275, 1.55, 0.048, "biceps");
       const tricepsGeo = fusiform(0.34, 0.062, -0.02, 16); tricepsGeo.scale(1,1,0.68); tricepsGeo.computeVertexNormals();
-      add(tricepsGeo, s * 0.31, 1.49, -0.05, "triceps");
+      add(tricepsGeo, s * 0.275, 1.55, -0.05, "triceps");
 
       const forearmProfile = [[0.00,0.02],[0.072,0.0],[0.066,-0.20],[0.053,-0.40],[0.043,-0.48],[0.00,-0.49]];
-      add(latheGeo(forearmProfile, 24), s * 0.32, 1.17, 0);
+      add(latheGeo(forearmProfile, 24), s * 0.285, 1.23, 0);
       const forearmMuscleGeo = fusiform(0.30, 0.058, 0.06, 16); forearmMuscleGeo.scale(1,1,0.72); forearmMuscleGeo.computeVertexNormals();
-      add(forearmMuscleGeo, s * 0.32, 0.99, 0, "forearms");
+      add(forearmMuscleGeo, s * 0.285, 1.05, 0, "forearms");
 
-      add(bump(0.047, 0.065, 0.030), s * 0.325, 0.63, 0);  // 手
+      add(bump(0.047, 0.065, 0.030), s * 0.29, 0.69, 0);  // 手
 
       // ---- 脚 ----
       const thighProfile = [[0.00,0.02],[0.145,0.0],[0.155,-0.25],[0.14,-0.55],[0.118,-0.78],[0.10,-0.85],[0.00,-0.86]];
