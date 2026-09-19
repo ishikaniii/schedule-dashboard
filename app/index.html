@@ -525,8 +525,12 @@
       });
       const text = result.data.text || "";
       const amount = guessTotalAmount(text);
-      ocrStatus.textContent = amount ? `金額の候補: ${fmtYen(amount)}（下で確認・修正してください）` : "金額を自動で読み取れませんでした。手入力してください。";
+      const category = guessCategory(text);
+      const amountMsg = amount ? `金額の候補: ${fmtYen(amount)}` : "金額を自動で読み取れませんでした";
+      const categoryMsg = category ? `分類の候補: ${category}` : null;
+      ocrStatus.textContent = [amountMsg, categoryMsg].filter(Boolean).join(" / ") + "（下で確認・修正してください）";
       document.getElementById("r-amount").value = amount || "";
+      if (category) document.getElementById("r-category").value = category;
       formReceipt.style.display = "block";
     }catch(err){
       ocrStatus.textContent = "読み取りに失敗しました。手入力してください。";
@@ -567,6 +571,21 @@
     // 同じ重みの中では「一番下の行」を優先（一番大きい数字、ではない）。
     candidates.sort((a, b) => b.weight - a.weight || b.idx - a.idx);
     return candidates[0].n;
+  }
+
+  function guessCategory(text){
+    // 店名・キーワードからカテゴリを推測する（2026-09-19追加）。金額の
+    // 推測と同じ考え方：確信が持てるルールに一致したときだけ返す、
+    // 一致しなければnull（呼び出し側は現在の選択をそのまま維持し、
+    // 「自動判定できませんでした」という扱いにする）。
+    const rules = [
+      { cat: "日用品", re: /ダイソー|DAISO|セリア|Seria|キャンドゥ|ドン・?キホーテ|ニトリ|無印良品|薬局|ドラッグ|マツモトキヨシ|サンドラッグ|ツルハ/i },
+      { cat: "食費", re: /セブン-?イレブン|ファミリーマート|ローソン|LAWSON|フジ|イオン|マルナカ|スーパー|すき家|松屋|吉野家|マクドナルド|モスバーガー|ケンタッキー|コンビニ|ラーメン|CAFE|カフェ|COFFEE|スターバックス|STARBUCKS|食堂|弁当/i },
+      { cat: "交通費", re: /ガソリン|ENEOS|エネオス|駐輪場|駐車場|タイムズ|TIMES|JR[^A-Z]|バス|地下鉄|Suica|ICOCA|PASMO/i },
+      { cat: "趣味・娯楽", re: /TSUTAYA|蔦屋|GEO|ゲオ|ブックオフ|BOOKOFF|カラオケ|CINEMA|映画/i },
+    ];
+    for (const r of rules) if (r.re.test(text)) return r.cat;
+    return null;
   }
 
   formReceipt.addEventListener("submit", async (e) => {
