@@ -472,12 +472,11 @@
       </div>
       <div class="sched-period" id="sched-period-label"></div>
       <div class="legend">
-        <span><span class="dot strength"></span>締切</span>
-        <span><span class="dot shift"></span>バイト</span>
-        <span><span class="dot goals"></span>授業</span>
-        <span><span class="dot personal"></span>私用</span>
-        <span><span class="dot" style="background:hsl(180,62%,50%)"></span>健康</span>
-        <span class="tag">同じ授業・予定は同じ色</span>
+        <span><span class="dot" style="background:#e5484d"></span>締切</span>
+        <span><span class="dot" style="background:#2fa35a"></span>バイト</span>
+        <span><span class="dot" style="background:#3b6fe0"></span>授業</span>
+        <span><span class="dot" style="background:#f0a020"></span>私用</span>
+        <span><span class="dot" style="background:#9a5bd6"></span>健康</span>
         <span class="tag" id="sched-updated"></span>
       </div>
 
@@ -912,17 +911,9 @@
   //      まだカレンダー未反映の予定。次回のPC側同期でGoogleカレンダーに
   //      登録されるまでの間、「同期待ち」として破線つきで表示する
   //      （追加した予定がその場で消えたように見えないようにするため）。
-  // 予定の色。種類ごとに色相の範囲を割り当て、その中で件名（授業名・予定名）
-  // から色相を決める——同じ授業は常に同じ色、違う授業は違う色になる。
-  const KIND_HUE = { assignment_due:[0,22], shift:[105,150], class:[205,285], personal:[28,62], health:[165,195] };
-  function eventColor(ev){
-    const r = KIND_HUE[ev.family_type] || [300,340];
-    let h = 0; const key = String(ev.title || "").replace(/[\s　]+/g,"");
-    for (let i=0;i<key.length;i++) h = (h*31 + key.charCodeAt(i)) >>> 0;
-    const hue = r[0] + (h % 1000) / 1000 * (r[1]-r[0]);
-    const light = ev.family_type === "class" ? 46 + (h>>10)%14 : 48 + (h>>10)%10;
-    return `hsl(${hue.toFixed(0)},${62 + (h>>14)%18}%,${light}%)`;
-  }
+  // 予定の色。カテゴリごとに1色（色相を大きく離して見分けやすくする）。
+  const KIND_COLOR = { assignment_due:"#e5484d", shift:"#2fa35a", class:"#3b6fe0", personal:"#f0a020", health:"#9a5bd6" };
+  function eventColor(ev){ return KIND_COLOR[ev.family_type] || "#8a93a3"; }
   const FAMILY_DOT_CLASS = { assignment_due: "strength", shift: "shift", class: "goals", personal: "personal" };
   const FAMILY_LABEL = { assignment_due: "締切", shift: "バイト", class: "授業", personal: "私用", health: "健康" };
   const SCHED_DOW = ["月","火","水","木","金","土","日"];
