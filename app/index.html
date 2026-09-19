@@ -820,6 +820,9 @@
 
   function startOfDay(d){ const x = new Date(d); x.setHours(0,0,0,0); return x; }
   function ymd(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; }
+  // "2026-09-19"をローカル日付として解釈する（new Date(文字列)はUTC扱いに
+  // なり、JSTだと前日にズレることがあるため、成分を分解して組み立てる）。
+  function parseYmd(s){ const [y,m,d] = s.split("-").map(Number); return new Date(y, m-1, d); }
   function addDays(d, n){ const x = new Date(d); x.setDate(x.getDate()+n); return x; }
   function startOfWeek(d){ return addDays(startOfDay(d), -(((d.getDay()+6)%7))); } // 月曜始まり
   function toMinutes(hhmm){ const [h,m] = hhmm.split(":").map(Number); return h*60 + m; }
@@ -1015,6 +1018,11 @@
 
   function selectSchedDate(dateStr){
     schedSelectedDate = dateStr;
+    // クリックした日を基準日にしておく（2026-09-19、ユーザー要望）。
+    // これで月表示で日付をタップ→「週」「日」に切り替えると、その日を
+    // 含む週／その日そのものが開く。同じ月・同じ週の中での選択なら
+    // 表示中の期間は変わらないので、画面が飛ぶことはない。
+    schedAnchor = parseYmd(dateStr);
     if (schedView === "month") renderMonthView();
     const panel = document.getElementById("sched-day-detail");
     const items = schedEventsByDate[dateStr] || [];
