@@ -535,18 +535,37 @@
   });
 
   function guessTotalAmount(text){
+    // 2026-09-19修正: 以前は「¥/円が無くても2〜7桁の数字なら全部候補にして、
+    // キーワード行が見つからなければ一番大きい数字を選ぶ」というフォールバック
+    // だったため、OCRが「合計」を読み違えた場合に電話番号・登録番号
+    // （T9500001003505等）を合計金額と誤認する事故が実際に発生した。
+    // 修正方針：①電話番号・レジ番号・登録番号などの行はそもそも除外、
+    // ②¥マーク or カンマ区切り(1,000円のような実際の金額表記) or 円が
+    // 隣接する数字だけを候補にする（マーカー無しの裸の数字は拾わない）、
+    // ③キーワード行が無ければ「一番大きい数字」ではなく「一番下の行」を選ぶ
+    // （合計は通常レシートの下の方にあるため、誤爆時の被害を抑える）。
+    // それでも候補が無ければnullを返し、呼び出し側が「読み取れませんでした」
+    // と正直に伝える（誤った金額を自信ありげに出さないことを優先する）。
     const lines = text.split("\n");
+    const excludeLine = /TEL|電話|FAX|レジ|No\.?|登録番号|責任者?|^T\s*[0-9]{5,}|お預り|お釣り|年\s*[0-9]|時[0-9]/i;
+    const priceNum = /[¥\\]\s*([0-9,]{2,7})|([0-9]{1,3}(?:,[0-9]{3})+)|([0-9]{2,6})\s*円/g;
+    const totalKeywords = /合\s*計|お会計|total/i;
+    const subtotalKeywords = /小\s*計/;
     const candidates = [];
-    const totalKeywords = /合計|お会計|total/i;
-    for (const line of lines){
-      const nums = [...line.matchAll(/[¥\\]?\s*([0-9,]{2,7})\s*円?/g)].map(m => parseInt(m[1].replace(/,/g,""),10)).filter(n => n >= 10 && n < 1000000);
-      if (nums.length){
-        const weight = totalKeywords.test(line) ? 10 : 1;
-        nums.forEach(n => candidates.push({ n, weight }));
-      }
-    }
+    lines.forEach((line, idx) => {
+      if (excludeLine.test(line)) return;
+      const nums = [...line.matchAll(priceNum)]
+        .map(m => parseInt((m[1] || m[2] || m[3]).replace(/,/g, ""), 10))
+        .filter(n => n >= 10 && n < 1000000);
+      if (!nums.length) return;
+      let weight = 1;
+      if (totalKeywords.test(line)) weight = 10;
+      else if (subtotalKeywords.test(line)) weight = 3;
+      nums.forEach(n => candidates.push({ n, weight, idx }));
+    });
     if (!candidates.length) return null;
-    candidates.sort((a,b) => b.weight - a.weight || b.n - a.n);
+    // 同じ重みの中では「一番下の行」を優先（一番大きい数字、ではない）。
+    candidates.sort((a, b) => b.weight - a.weight || b.idx - a.idx);
     return candidates[0].n;
   }
 
