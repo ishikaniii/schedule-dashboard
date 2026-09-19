@@ -1527,82 +1527,164 @@
   const rpeInput = document.getElementById("s-rpe");
   rpeInput.addEventListener("input", () => { document.getElementById("s-rpe-readout").textContent = rpeInput.value; });
 
-  // ---- 人体モデル（Three.jsによる3D表示、2026-09-19） ----
-  // 外部の3Dモデルファイルは読み込まず、プリミティブ（球・箱・円柱）を
-  // 組み合わせて人体を構成する。理由：ライセンスの確かな人体モデルを外部
-  // から持ってくるより自前で組んだ方が確実で、筋肉ごとにメッシュを分けて
-  // 個別に色を変えるのも簡単なため。ドラッグで自由に回転できる。
+  // ---- 人体モデル（Three.jsによる3D表示、2026-09-19。同日後半にマネキン風
+  // の滑らかな一体成形へ作り直し） ----
+  // 外部の3Dモデルファイルは読み込まない（ライセンスが確かで、かつ筋肉ごとに
+  // 独立して色を変えられる無料モデルはほぼ存在しないため、自前で組む方が
+  // 確実——検討の経緯はユーザーとの会話を参照）。
+  //
+  // 「箱・円柱を並べたロボット」から「マネキンのような滑らかな一体成形」に
+  // 見た目を変えるため、胴体・骨盤・腕・脚の芯は THREE.LatheGeometry
+  // （断面の輪郭線を軸周りに回転させて滑らかな回転体を作る手法——ろくろで
+  // 陶器を挽くのと同じ原理で、マネキンの成形そのもの）で構成する。筋肉は
+  // その滑らかな芯の上に、高分割の楕円体をなだらかに食い込ませて重ねる
+  // ことで、輪郭に継ぎ目が出ないようにしている。色分けの仕組み（メッシュを
+  // 筋肉IDごとに BODY.meshes に集めておく）は変えていない。
   const BODY = { meshes: {}, group: null, ready: false };
+
+  // 断面プロファイル（[半径, 高さ]の配列）からLatheGeometryを作る。
+  // segments を高くするほど輪郭が丸くなる（デフォルト32分割）。
+  function latheGeo(profile, segments){
+    const pts = profile.map(([r, y]) => new THREE.Vector2(Math.max(r, 0.0001), y));
+    const geo = new THREE.LatheGeometry(pts, segments || 32);
+    geo.computeVertexNormals();
+    return geo;
+  }
 
   function buildBodyModel(container){
     if (typeof THREE === "undefined") return false;
-    const W = container.clientWidth || 240, H = 290;
+    const W = container.clientWidth || 240, H = 300;
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(32, W / H, 0.1, 100);
-    camera.position.set(0, 0.15, 9.4);
+    const camera = new THREE.PerspectiveCamera(30, W / H, 0.1, 100);
+    camera.position.set(0, 0.2, 9.8);
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(W, H);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     container.innerHTML = "";
     container.appendChild(renderer.domElement);
 
-    scene.add(new THREE.AmbientLight(0xffffff, 0.78));
-    const key = new THREE.DirectionalLight(0xffffff, 0.7); key.position.set(3, 5, 6); scene.add(key);
-    const rim = new THREE.DirectionalLight(0xffffff, 0.35); rim.position.set(-4, 2, -5); scene.add(rim);
+    // スタジオ写真のような、上からの柔らかい光＋正面の主光源＋背後のリム光。
+    // マネキンらしいマットな質感はMeshStandardMaterialのroughnessで作る。
+    scene.add(new THREE.HemisphereLight(0xffffff, 0xc9c2b4, 0.55));
+    const key = new THREE.DirectionalLight(0xffffff, 0.9);
+    key.position.set(3, 6, 6); key.castShadow = true;
+    key.shadow.mapSize.set(512, 512);
+    key.shadow.camera.left = -3; key.shadow.camera.right = 3;
+    key.shadow.camera.top = 3; key.shadow.camera.bottom = -3;
+    scene.add(key);
+    const fill = new THREE.DirectionalLight(0xffffff, 0.28); fill.position.set(-4, 1, 4); scene.add(fill);
+    const rim = new THREE.DirectionalLight(0xffffff, 0.4); rim.position.set(-2, 3, -6); scene.add(rim);
 
     const group = new THREE.Group();
     scene.add(group);
 
-    const add = (geo, x, y, z, muscleId, scale) => {
-      const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: 0x9aa1ad }));
+    // 接地の柔らかい影（本物の床影計算より軽量で、常に安定して見える）。
+    const shadowTex = (() => {
+      const c = document.createElement("canvas"); c.width = c.height = 128;
+      const ctx = c.getContext("2d");
+      const g = ctx.createRadialGradient(64, 64, 4, 64, 64, 62);
+      g.addColorStop(0, "rgba(0,0,0,0.32)"); g.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = g; ctx.fillRect(0, 0, 128, 128);
+      return new THREE.CanvasTexture(c);
+    })();
+    const shadowBlob = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.5, 1.5),
+      new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, depthWrite: false })
+    );
+    shadowBlob.rotation.x = -Math.PI / 2;
+    shadowBlob.position.y = -1.79;
+    group.add(shadowBlob);
+
+    const MANNEQUIN = 0xdcd6c7;  // マットなアイボリー（マネキン基調色）
+    BODY.baseColor = { r: (MANNEQUIN>>16)&255, g: (MANNEQUIN>>8)&255, b: MANNEQUIN&255 };
+    const add = (geo, x, y, z, muscleId) => {
+      const mat = new THREE.MeshStandardMaterial({ color: MANNEQUIN, roughness: 0.62, metalness: 0.04 });
+      const mesh = new THREE.Mesh(geo, mat);
       mesh.position.set(x, y, z);
-      if (scale) mesh.scale.set(scale[0], scale[1], scale[2]);
+      mesh.castShadow = true; mesh.receiveShadow = true;
       group.add(mesh);
       if (muscleId) (BODY.meshes[muscleId] = BODY.meshes[muscleId] || []).push(mesh);
       return mesh;
     };
-    const cyl = (rt, rb, h) => new THREE.CylinderGeometry(rt, rb, h, 16);
-    const sph = (r) => new THREE.SphereGeometry(r, 16, 12);
-    const box = (w, h, d) => new THREE.BoxGeometry(w, h, d);
+    // 高分割の楕円体（筋肉の膨らみ用）。拡大しても多角形が目立たない滑らかさ。
+    const bump = (rx, ry, rz) => {
+      const geo = new THREE.SphereGeometry(1, 28, 20);
+      geo.scale(rx, ry, rz);
+      geo.computeVertexNormals();
+      return geo;
+    };
 
-    // 体幹の芯（色分けの対象外）。角ばって見えないよう、箱ではなく
-    // 円柱・球を平たく潰したものを使う。
-    add(sph(0.4), 0, 2.35, 0, null, [0.92, 1.08, 0.92]);   // 頭
-    add(cyl(0.15, 0.17, 0.3), 0, 1.99, 0);                 // 首
-    add(cyl(0.62, 0.5, 1.5), 0, 1.15, 0, null, [1, 1, 0.58]);   // 胴
-    add(sph(0.46), 0, 0.28, 0, null, [1, 0.62, 0.62]);     // 骨盤
+    // ============ 芯（体幹・骨盤・首・頭）— 1本の回転体で滑らかに ============
+    // 肩幅→胸→ウエスト→腰→股までを1本のLatheGeometryにすることで、
+    // パーツの継ぎ目そのものを無くしている。
+    const torsoProfile = [
+      [0.00, 2.06], [0.115, 2.04], [0.135, 1.98],
+      [0.205, 1.90],
+      [0.225, 1.74], [0.230, 1.55], [0.220, 1.38],
+      [0.195, 1.18],
+      [0.205, 1.00], [0.235, 0.82], [0.250, 0.62],
+      [0.230, 0.42], [0.175, 0.20], [0.095, 0.02],
+      [0.00, -0.08],
+    ];
+    add(latheGeo(torsoProfile, 40), 0, 0, 0);
 
-    // 前面
-    add(sph(0.26), -0.24, 1.55, 0.26, "chest", [1, 0.92, 0.5]);
-    add(sph(0.26), 0.24, 1.55, 0.26, "chest", [1, 0.92, 0.5]);
-    add(sph(0.23), 0, 0.95, 0.26, "abs", [0.95, 1.5, 0.5]);
-    add(sph(0.14), -0.42, 0.98, 0.2, "obliques", [0.8, 2.1, 0.8]);
-    add(sph(0.14), 0.42, 0.98, 0.2, "obliques", [0.8, 2.1, 0.8]);
-    // 背面
-    add(sph(0.38), 0, 1.74, -0.22, "traps", [1, 0.55, 0.42]);
-    add(sph(0.26), -0.27, 1.3, -0.24, "lats", [1, 1.25, 0.5]);
-    add(sph(0.26), 0.27, 1.3, -0.24, "lats", [1, 1.25, 0.5]);
-    add(sph(0.22), 0, 0.78, -0.25, "lower_back", [1, 0.85, 0.5]);
-    add(sph(0.3), -0.24, 0.2, -0.2, "glutes", [1, 0.85, 0.85]);
-    add(sph(0.3), 0.24, 0.2, -0.2, "glutes", [1, 0.85, 0.85]);
+    const neckProfile = [[0.00,0.30],[0.095,0.29],[0.105,0.10],[0.10,0.0],[0.00,0.0]];
+    add(latheGeo(neckProfile, 32), 0, 2.06, 0);
+
+    // 頭：楕円体を横に少しだけ長くする（卵形）。真球よりマネキンらしい。
+    add(bump(0.34, 0.40, 0.36), 0, 2.46, 0);
+
+    // ============ 筋肉の膨らみ（前面） ============
+    add(bump(0.155, 0.135, 0.10), -0.135, 1.63, 0.175, "chest");
+    add(bump(0.155, 0.135, 0.10),  0.135, 1.63, 0.175, "chest");
+    add(bump(0.135, 0.20, 0.085), 0, 1.10, 0.17, "abs");
+    add(bump(0.055, 0.28, 0.075), -0.20, 1.10, 0.13, "obliques");
+    add(bump(0.055, 0.28, 0.075),  0.20, 1.10, 0.13, "obliques");
+
+    // ============ 筋肉の膨らみ（背面） ============
+    add(bump(0.24, 0.14, 0.10), 0, 1.86, -0.14, "traps");
+    add(bump(0.135, 0.22, 0.09), -0.155, 1.42, -0.155, "lats");
+    add(bump(0.135, 0.22, 0.09),  0.155, 1.42, -0.155, "lats");
+    add(bump(0.135, 0.14, 0.08), 0, 0.98, -0.155, "lower_back");
+    add(bump(0.145, 0.155, 0.135), -0.135, 0.44, -0.14, "glutes");
+    add(bump(0.145, 0.155, 0.135),  0.135, 0.44, -0.14, "glutes");
 
     [-1, 1].forEach(s => {
-      add(sph(0.19), s * 0.66, 1.7, 0.14, "delts_front", [0.9, 1, 0.8]);
-      add(sph(0.21), s * 0.75, 1.74, 0, "delts_side");
-      add(sph(0.19), s * 0.66, 1.7, -0.16, "delts_rear", [0.9, 1, 0.8]);
-      add(sph(0.16), s * 0.84, 1.3, 0.07, "biceps", [0.85, 2.1, 0.85]);
-      add(sph(0.16), s * 0.84, 1.3, -0.11, "triceps", [0.85, 2.1, 0.85]);
-      add(cyl(0.13, 0.1, 0.58), s * 0.9, 0.68, 0, "forearms");
-      add(sph(0.11), s * 0.93, 0.36, 0);
-      // 太ももは前後2枚に分ける。半径を大きいままにすると大腿四頭筋の円柱が
-      // ハムストリングを完全に飲み込んでしまい、背面から見ても色が出ない
-      // （2026-09-19、実機スクリーンショットで発覚）。z方向に潰して前後へ
-      // オフセットし、どちらの面からもそれぞれが見えるようにする。
-      add(cyl(0.22, 0.19, 0.92), s * 0.25, -0.42, 0.09, "quads", [1, 1, 0.7]);
-      add(cyl(0.22, 0.19, 0.88), s * 0.25, -0.42, -0.1, "hamstrings", [1, 1, 0.7]);
-      add(cyl(0.12, 0.1, 0.72), s * 0.11, -0.5, 0, "adductors");
-      add(cyl(0.18, 0.12, 0.76), s * 0.25, -1.3, 0, "calves");
-      add(sph(0.16), s * 0.25, -1.72, 0.08, null, [0.9, 0.5, 1.5]);
+      // ---- 肩・腕 ----
+      add(bump(0.115, 0.12, 0.115), s * 0.30, 1.87, 0.085, "delts_front");
+      add(bump(0.125, 0.13, 0.125), s * 0.335, 1.89, 0, "delts_side");
+      add(bump(0.115, 0.12, 0.115), s * 0.30, 1.87, -0.10, "delts_rear");
+
+      // 上腕・前腕は回転体を「芯」として置き、前後に色付き筋肉を重ねる
+      // （回転体自体は色分けの対象外＝muscleIdを渡さない）。
+      const upperArmProfile = [[0.00,0.02],[0.105,0.0],[0.11,-0.18],[0.095,-0.36],[0.08,-0.50],[0.00,-0.52]];
+      add(latheGeo(upperArmProfile, 28), s * 0.365, 1.72, 0);
+      add(bump(0.085, 0.19, 0.06), s * 0.365, 1.50, 0.055, "biceps");
+      add(bump(0.085, 0.19, 0.06), s * 0.365, 1.50, -0.06, "triceps");
+
+      const forearmProfile = [[0.00,0.02],[0.085,0.0],[0.078,-0.20],[0.062,-0.40],[0.05,-0.48],[0.00,-0.49]];
+      add(latheGeo(forearmProfile, 28), s * 0.375, 1.18, 0);
+      add(bump(0.062, 0.19, 0.062), s * 0.375, 0.99, 0, "forearms");
+
+      add(bump(0.055, 0.075, 0.035), s * 0.38, 0.62, 0);  // 手
+
+      // ---- 脚 ----
+      const thighProfile = [[0.00,0.02],[0.165,0.0],[0.175,-0.25],[0.16,-0.55],[0.135,-0.78],[0.115,-0.85],[0.00,-0.86]];
+      add(latheGeo(thighProfile, 32), s * 0.155, 0.30, 0);
+      add(bump(0.115, 0.24, 0.10), s * 0.155, 0.02, 0.075, "quads");
+      add(bump(0.115, 0.24, 0.10), s * 0.155, 0.02, -0.09, "hamstrings");
+      add(bump(0.07, 0.24, 0.065), s * 0.075, 0.02, 0, "adductors");
+
+      const calfProfile = [[0.00,0.02],[0.115,0.0],[0.105,-0.22],[0.075,-0.45],[0.05,-0.60],[0.00,-0.61]];
+      add(latheGeo(calfProfile, 32), s * 0.155, -0.55, 0);
+      add(bump(0.078, 0.20, 0.078), s * 0.155, -0.78, -0.03, "calves");
+
+      // 足（甲を少し盛り上げた滑らかなくさび形）
+      const footProfile = [[0.00,0.0],[0.065,0.0],[0.075,-0.03],[0.06,-0.07],[0.00,-0.08]];
+      const foot = add(latheGeo(footProfile, 24), s * 0.155, -1.62, 0.12);
+      foot.rotation.x = Math.PI / 2; foot.scale.set(1, 1.9, 1);
     });
 
     BODY.group = group;
@@ -1707,7 +1789,10 @@
     const max = Math.max(...Object.values(scores), 0);
 
     if (BODY.ready){
-      const dim = cssRgb("--ink-dim"), hot = cssRgb("--strength");
+      // 未選択時（t=0）はマネキンの地の色そのものに戻す——ink-dimのような
+      // 別トーンにすると、筋肉の膨らみだけ色が違う継ぎ接ぎに見えてしまう
+      // （2026-09-19、マネキン化の際に発見・修正）。
+      const dim = BODY.baseColor || cssRgb("--ink-dim"), hot = cssRgb("--strength");
       Object.entries(BODY.meshes).forEach(([id, meshes]) => {
         const v = scores[id] || 0;
         const t = max > 0 && v > 0 ? Math.max(v / max, 0.18) : 0;
