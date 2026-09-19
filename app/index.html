@@ -154,6 +154,64 @@
   .legend{ display:flex; flex-wrap:wrap; gap:12px; margin-bottom:12px; font-size:12px; color:var(--ink-dim); }
   .legend span{ display:inline-flex; align-items:center; gap:5px; }
 
+  /* ---- スケジュールタブ（Googleカレンダー風、2026-09-19） ---- */
+  .sched-toolbar{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; flex-wrap:wrap; }
+  .view-switch{ display:flex; background:var(--surface-2); border:1px solid var(--border); border-radius:9px; padding:3px; }
+  .view-switch button{
+    border:none; background:transparent; color:var(--ink-dim); cursor:pointer; padding:6px 14px;
+    border-radius:7px; font-family:"Oswald",sans-serif; font-size:13px; letter-spacing:.03em;
+  }
+  .view-switch button.active{ background:var(--surface); color:var(--ink); box-shadow:var(--shadow); }
+  .sched-nav{ display:flex; align-items:center; gap:6px; }
+  .sched-nav button{
+    border:1px solid var(--border); background:var(--surface-2); color:var(--ink);
+    border-radius:8px; height:32px; min-width:32px; cursor:pointer; font-size:15px; padding:0 8px;
+  }
+  .sched-nav .today-btn{ font-size:12px; font-family:"Oswald",sans-serif; }
+  .sched-period{ font-family:"Oswald",sans-serif; font-size:17px; letter-spacing:.02em; margin-bottom:10px; }
+
+  /* 月表示：日付セルに予定の見出しを並べる */
+  .mcal-grid{ display:grid; grid-template-columns:repeat(7,1fr); gap:3px; }
+  .mcal-dow{ text-align:center; font-size:11px; color:var(--ink-dim); padding-bottom:4px; }
+  .mcal-cell{
+    min-height:78px; border:1px solid var(--border); border-radius:8px; background:var(--surface-2);
+    padding:4px; cursor:pointer; display:flex; flex-direction:column; gap:2px; overflow:hidden;
+  }
+  .mcal-cell.empty-cell{ visibility:hidden; cursor:default; }
+  .mcal-cell.today{ border-color:var(--focus); }
+  .mcal-cell.selected{ background:var(--surface); box-shadow:0 0 0 2px var(--focus) inset; }
+  .mcal-cell .dnum{ font-size:11.5px; color:var(--ink-dim); font-family:"IBM Plex Mono",monospace; }
+  .mcal-cell.today .dnum{ color:var(--focus); font-weight:600; }
+  .evt-chip{
+    font-size:10.5px; line-height:1.25; padding:2px 4px; border-radius:4px; color:#fff;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .evt-chip.strength{ background:var(--strength); } .evt-chip.shift{ background:var(--shift); }
+  .evt-chip.goals{ background:var(--goals); } .evt-chip.personal{ background:var(--ink-dim); }
+  .evt-chip.pending{ opacity:.65; border:1px dashed rgba(255,255,255,.7); }
+  .evt-more{ font-size:10px; color:var(--ink-dim); padding-left:2px; }
+
+  /* 週/日表示：時間グリッド */
+  .tg-allday{ display:flex; flex-wrap:wrap; gap:4px; margin-bottom:8px; min-height:0; }
+  .tg-wrap{ display:flex; max-height:60vh; overflow-y:auto; border:1px solid var(--border); border-radius:8px; background:var(--surface-2); }
+  .tg-hours{ flex:none; width:38px; }
+  .tg-hour{ height:38px; font-size:10px; color:var(--ink-dim); text-align:right; padding-right:4px;
+            font-family:"IBM Plex Mono",monospace; border-top:1px solid var(--border); }
+  .tg-cols{ flex:1; display:grid; }
+  .tg-col{ position:relative; border-left:1px solid var(--border); }
+  .tg-col .tg-lines{ position:absolute; inset:0; }
+  .tg-col .tg-line{ height:38px; border-top:1px solid var(--border); }
+  .tg-colhead{ text-align:center; font-size:11px; padding:4px 0; color:var(--ink-dim); border-left:1px solid var(--border); }
+  .tg-colhead.today{ color:var(--focus); font-weight:600; }
+  .tg-headrow{ display:grid; margin-left:38px; }
+  .tg-event{
+    position:absolute; left:2px; right:2px; border-radius:5px; padding:2px 4px; color:#fff;
+    font-size:10.5px; line-height:1.2; overflow:hidden; cursor:pointer;
+  }
+  .tg-event.strength{ background:var(--strength); } .tg-event.shift{ background:var(--shift); }
+  .tg-event.goals{ background:var(--goals); } .tg-event.personal{ background:var(--ink-dim); }
+  .tg-event.pending{ opacity:.7; border:1px dashed rgba(255,255,255,.8); }
+
   .status-banner{ background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:10px 12px; font-size:12.5px; color:var(--ink-dim); margin-bottom:16px; display:none; }
 
   .goal-block{ margin-bottom:16px; } .goal-block:last-child{ margin-bottom:0; }
@@ -335,25 +393,84 @@
   <!-- ============ スケジュール ============ -->
   <section class="panel" id="panel-schedule">
     <div class="card">
-      <h2>予定カレンダー<span class="tag" id="sched-updated"></span></h2>
+      <div class="sched-toolbar">
+        <div class="view-switch" id="sched-view-switch">
+          <button data-view="month" class="active">月</button>
+          <button data-view="week">週</button>
+          <button data-view="day">日</button>
+        </div>
+        <div class="sched-nav">
+          <button id="sched-prev" aria-label="前へ">‹</button>
+          <button id="sched-today" class="today-btn">今日</button>
+          <button id="sched-next" aria-label="次へ">›</button>
+        </div>
+      </div>
+      <div class="sched-period" id="sched-period-label"></div>
       <div class="legend">
         <span><span class="dot strength"></span>締切</span>
         <span><span class="dot shift"></span>バイト</span>
         <span><span class="dot goals"></span>授業</span>
         <span><span class="dot personal"></span>私用</span>
+        <span class="tag" id="sched-updated"></span>
       </div>
-      <div class="cal-head">
-        <button id="sched-cal-prev" aria-label="前の月">‹</button>
-        <div class="month-label" id="sched-cal-month-label"></div>
-        <button id="sched-cal-next" aria-label="次の月">›</button>
+
+      <!-- 月表示 -->
+      <div id="sched-month-view">
+        <div class="mcal-grid" id="sched-dow-row"></div>
+        <div class="mcal-grid" id="sched-month-grid"></div>
       </div>
-      <div class="cal-grid" id="sched-cal-dow-row"></div>
-      <div class="cal-grid" id="sched-cal-grid" style="margin-top:4px;"></div>
+
+      <!-- 週/日表示（時間グリッド） -->
+      <div id="sched-time-view" style="display:none;">
+        <div class="tg-allday" id="tg-allday"></div>
+        <div class="tg-wrap">
+          <div class="tg-hours" id="tg-hours"></div>
+          <div class="tg-cols" id="tg-cols"></div>
+        </div>
+      </div>
+
       <div class="day-detail" id="sched-day-detail" style="display:none;">
         <div class="dd-title" id="sched-dd-title"></div>
         <div id="sched-dd-items"></div>
+        <button class="submit goals" id="sched-add-here" style="margin-top:10px;">この日に予定を追加</button>
       </div>
       <p class="empty" id="sched-empty" style="display:none;">まだ同期されていません。PC側の同期スクリプトの実行を待っています。</p>
+    </div>
+
+    <div class="card" id="sched-add-card" style="display:none;">
+      <h2><span class="dot personal"></span>予定を追加</h2>
+      <form id="form-sched-add">
+        <div class="field">
+          <label for="sa-title">予定名</label>
+          <input type="text" id="sa-title" required>
+        </div>
+        <div class="field">
+          <label for="sa-date">日付</label>
+          <input type="date" id="sa-date" required>
+        </div>
+        <div class="field">
+          <label><input type="checkbox" id="sa-allday"> 時刻を指定しない（終日の予定）</label>
+        </div>
+        <div class="row2" id="sa-time-row">
+          <div class="field">
+            <label for="sa-start">開始</label>
+            <input type="time" id="sa-start">
+          </div>
+          <div class="field">
+            <label for="sa-end">終了</label>
+            <input type="time" id="sa-end">
+          </div>
+        </div>
+        <div class="field">
+          <label for="sa-note">メモ</label>
+          <textarea id="sa-note" rows="2"></textarea>
+        </div>
+        <div class="row2">
+          <button type="submit" class="submit goals" id="sa-submit">追加する</button>
+          <button type="button" class="submit" id="sa-cancel" style="background:var(--surface-2);color:var(--ink);">キャンセル</button>
+        </div>
+        <div class="ocr-status" id="sa-status"></div>
+      </form>
     </div>
   </section>
 
@@ -683,21 +800,50 @@
     }
   }
 
-  // ============ スケジュールタブ（Googleカレンダー風の月表示） ============
-  // 2026-09-19追加。データはdashboard_snapshot.calendar_events（PC側の
-  // sync_supabase.pyが前7日〜先45日の範囲で書き込む、締切・バイト・授業・
-  // 私用の4種）。トレログの月カレンダー（strengthLogs/cardioLogs版）と
-  // 同じ構造だが、家族種別(family_type)が4種になった分だけ拡張している。
-  let schedMonth = new Date(); schedMonth.setDate(1);
-  let schedEventsByDate = {};
-
-  const SCHED_DOW = ["月","火","水","木","金","土","日"];
-  document.getElementById("sched-cal-dow-row").innerHTML = SCHED_DOW.map(d => `<div class="cal-dow">${d}</div>`).join("");
-  document.getElementById("sched-cal-prev").addEventListener("click", () => { schedMonth.setMonth(schedMonth.getMonth()-1); renderSchedCalendar(); });
-  document.getElementById("sched-cal-next").addEventListener("click", () => { schedMonth.setMonth(schedMonth.getMonth()+1); renderSchedCalendar(); });
-
+  // ============ スケジュールタブ（Googleカレンダー風、月/週/日表示） ============
+  // データ元は2系統：
+  //   1) dashboard_snapshot.calendar_events — PC側sync_supabase.pyが
+  //      前30日〜先45日で書き込む、締切・バイト・授業・私用の確定予定。
+  //   2) pending_personal_plans (status=confirmed) — アプリから追加された
+  //      まだカレンダー未反映の予定。次回のPC側同期でGoogleカレンダーに
+  //      登録されるまでの間、「同期待ち」として破線つきで表示する
+  //      （追加した予定がその場で消えたように見えないようにするため）。
   const FAMILY_DOT_CLASS = { assignment_due: "strength", shift: "shift", class: "goals", personal: "personal" };
   const FAMILY_LABEL = { assignment_due: "締切", shift: "バイト", class: "授業", personal: "私用" };
+  const SCHED_DOW = ["月","火","水","木","金","土","日"];
+  const TG_START_HOUR = 6, TG_END_HOUR = 24, TG_ROW_PX = 38;
+
+  let schedView = "month";            // "month" | "week" | "day"
+  let schedAnchor = startOfDay(new Date());  // 表示中の期間の基準日
+  let schedEventsByDate = {};
+  let schedSelectedDate = null;
+
+  function startOfDay(d){ const x = new Date(d); x.setHours(0,0,0,0); return x; }
+  function ymd(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; }
+  function addDays(d, n){ const x = new Date(d); x.setDate(x.getDate()+n); return x; }
+  function startOfWeek(d){ return addDays(startOfDay(d), -(((d.getDay()+6)%7))); } // 月曜始まり
+  function toMinutes(hhmm){ const [h,m] = hhmm.split(":").map(Number); return h*60 + m; }
+
+  document.getElementById("sched-dow-row").innerHTML = SCHED_DOW.map(d => `<div class="mcal-dow">${d}</div>`).join("");
+
+  document.getElementById("sched-view-switch").addEventListener("click", (e) => {
+    if (e.target.tagName !== "BUTTON") return;
+    schedView = e.target.dataset.view;
+    [...e.currentTarget.children].forEach(b => b.classList.toggle("active", b === e.target));
+    renderSchedule();
+  });
+  document.getElementById("sched-prev").addEventListener("click", () => { moveSchedAnchor(-1); });
+  document.getElementById("sched-next").addEventListener("click", () => { moveSchedAnchor(1); });
+  document.getElementById("sched-today").addEventListener("click", () => {
+    schedAnchor = startOfDay(new Date()); renderSchedule();
+  });
+
+  function moveSchedAnchor(dir){
+    if (schedView === "month"){ schedAnchor = new Date(schedAnchor.getFullYear(), schedAnchor.getMonth()+dir, 1); }
+    else if (schedView === "week"){ schedAnchor = addDays(schedAnchor, 7*dir); }
+    else { schedAnchor = addDays(schedAnchor, dir); }
+    renderSchedule();
+  }
 
   async function loadSchedule(){
     let row = dashboardSnapCache;
@@ -707,50 +853,240 @@
     const events = (snap && snap.calendar_events) || [];
     document.getElementById("sched-empty").style.display = events.length ? "none" : "block";
 
+    // 同期待ちの追加分も取得してマージ
+    let pending = [];
+    try{
+      const { data: pendingRows } = await sb.from("pending_personal_plans").select("*").eq("status","confirmed");
+      pending = (pendingRows || []).map(p => ({
+        date: p.date, title: p.title, family_type: "personal",
+        start_time: p.start_time, end_time: p.end_time, amount: null, pending: true,
+      }));
+    }catch(e){ /* テーブル未作成などは無視（確定分だけ表示する） */ }
+
     schedEventsByDate = {};
-    events.forEach(ev => { (schedEventsByDate[ev.date] ||= []).push(ev); });
-    renderSchedCalendar();
+    [...events, ...pending].forEach(ev => { (schedEventsByDate[ev.date] ||= []).push(ev); });
+    Object.values(schedEventsByDate).forEach(list =>
+      list.sort((a,b) => (a.start_time || "").localeCompare(b.start_time || "")));
+    renderSchedule();
   }
 
-  function renderSchedCalendar(){
-    const y = schedMonth.getFullYear(), m = schedMonth.getMonth();
-    document.getElementById("sched-cal-month-label").textContent = `${y}年 ${m+1}月`;
+  function renderSchedule(){
+    const monthView = document.getElementById("sched-month-view");
+    const timeView = document.getElementById("sched-time-view");
+    if (schedView === "month"){
+      monthView.style.display = "block"; timeView.style.display = "none";
+      renderMonthView();
+    } else {
+      monthView.style.display = "none"; timeView.style.display = "block";
+      renderTimeGrid(schedView === "week" ? 7 : 1);
+    }
+  }
+
+  // ---- 月表示：セルに予定の見出しを最大3件＋「他N件」 ----
+  function renderMonthView(){
+    const y = schedAnchor.getFullYear(), m = schedAnchor.getMonth();
+    document.getElementById("sched-period-label").textContent = `${y}年 ${m+1}月`;
     const firstDow = (new Date(y,m,1).getDay()+6)%7;
     const daysInMonth = new Date(y,m+1,0).getDate();
-    const today = new Date().toISOString().slice(0,10);
-    const grid = document.getElementById("sched-cal-grid");
+    const today = ymd(new Date());
+    const grid = document.getElementById("sched-month-grid");
     grid.innerHTML = "";
-    for (let i=0;i<firstDow;i++){ const c=document.createElement("div"); c.className="cal-cell empty-cell"; grid.appendChild(c); }
+    for (let i=0;i<firstDow;i++){ const c=document.createElement("div"); c.className="mcal-cell empty-cell"; grid.appendChild(c); }
     for (let d=1; d<=daysInMonth; d++){
       const dateStr = `${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
       const cell = document.createElement("div");
-      cell.className = "cal-cell" + (dateStr===today ? " today" : "");
+      cell.className = "mcal-cell" + (dateStr===today ? " today" : "") + (dateStr===schedSelectedDate ? " selected" : "");
       const dayEvents = schedEventsByDate[dateStr] || [];
-      const seenTypes = [...new Set(dayEvents.map(e => e.family_type))];
-      const dots = seenTypes.map(t => `<span class="dot ${FAMILY_DOT_CLASS[t] || "personal"}"></span>`).join("");
-      cell.innerHTML = `<span>${d}</span><span class="dots">${dots}</span>`;
-      cell.addEventListener("click", () => showSchedDayDetail(dateStr));
+      const shown = dayEvents.slice(0,3).map(ev => {
+        const cls = FAMILY_DOT_CLASS[ev.family_type] || "personal";
+        const t = ev.start_time ? ev.start_time.replace(/^0/,"") + " " : "";
+        return `<div class="evt-chip ${cls}${ev.pending ? " pending" : ""}">${escapeHtml(t + ev.title)}</div>`;
+      }).join("");
+      const more = dayEvents.length > 3 ? `<div class="evt-more">他${dayEvents.length-3}件</div>` : "";
+      cell.innerHTML = `<div class="dnum">${d}</div>${shown}${more}`;
+      cell.addEventListener("click", () => selectSchedDate(dateStr));
       grid.appendChild(cell);
     }
   }
 
-  function showSchedDayDetail(dateStr){
+  // ---- 週/日表示：時間グリッド ----
+  function renderTimeGrid(dayCount){
+    const startDate = dayCount === 7 ? startOfWeek(schedAnchor) : startOfDay(schedAnchor);
+    const days = Array.from({length: dayCount}, (_, i) => addDays(startDate, i));
+    const today = ymd(new Date());
+
+    document.getElementById("sched-period-label").textContent = dayCount === 7
+      ? `${startDate.getMonth()+1}/${startDate.getDate()} 〜 ${days[6].getMonth()+1}/${days[6].getDate()}`
+      : `${startDate.getFullYear()}年 ${startDate.getMonth()+1}月${startDate.getDate()}日（${SCHED_DOW[(startDate.getDay()+6)%7]}）`;
+
+    // 時刻ラベル列
+    const hoursEl = document.getElementById("tg-hours");
+    hoursEl.innerHTML = "";
+    for (let h = TG_START_HOUR; h < TG_END_HOUR; h++){
+      const el = document.createElement("div");
+      el.className = "tg-hour"; el.textContent = `${h}`;
+      hoursEl.appendChild(el);
+    }
+
+    // 終日・時刻なしの予定は上のストリップへ
+    const alldayEl = document.getElementById("tg-allday");
+    alldayEl.innerHTML = "";
+    days.forEach(d => {
+      (schedEventsByDate[ymd(d)] || []).filter(ev => !ev.start_time).forEach(ev => {
+        const chip = document.createElement("div");
+        chip.className = `evt-chip ${FAMILY_DOT_CLASS[ev.family_type] || "personal"}${ev.pending ? " pending" : ""}`;
+        chip.textContent = (dayCount === 7 ? `${d.getMonth()+1}/${d.getDate()} ` : "") + ev.title;
+        chip.addEventListener("click", () => selectSchedDate(ymd(d)));
+        alldayEl.appendChild(chip);
+      });
+    });
+
+    const colsEl = document.getElementById("tg-cols");
+    colsEl.style.gridTemplateColumns = `repeat(${dayCount}, 1fr)`;
+    colsEl.innerHTML = "";
+    const totalMin = (TG_END_HOUR - TG_START_HOUR) * 60;
+
+    days.forEach(d => {
+      const dateStr = ymd(d);
+      const col = document.createElement("div");
+      col.className = "tg-col";
+      col.style.height = `${(TG_END_HOUR - TG_START_HOUR) * TG_ROW_PX}px`;
+      const lines = document.createElement("div");
+      lines.className = "tg-lines";
+      for (let h = TG_START_HOUR; h < TG_END_HOUR; h++){
+        const l = document.createElement("div"); l.className = "tg-line"; lines.appendChild(l);
+      }
+      col.appendChild(lines);
+
+      const timed = (schedEventsByDate[dateStr] || []).filter(ev => ev.start_time);
+      layoutLanes(timed).forEach(({ev, lane, lanes}) => {
+        const s = Math.max(toMinutes(ev.start_time), TG_START_HOUR*60);
+        // 終了が開始より前＝日跨ぎ（深夜バイトなど）。その日の終端で切る。
+        let e = ev.end_time ? toMinutes(ev.end_time) : s + 60;
+        if (e <= s) e = TG_END_HOUR * 60;
+        e = Math.min(e, TG_END_HOUR*60);
+        if (e <= TG_START_HOUR*60) return;
+        const el = document.createElement("div");
+        el.className = `tg-event ${FAMILY_DOT_CLASS[ev.family_type] || "personal"}${ev.pending ? " pending" : ""}`;
+        el.style.top = `${((s - TG_START_HOUR*60) / totalMin) * 100}%`;
+        el.style.height = `${Math.max(((e - s) / totalMin) * 100, 2.2)}%`;
+        el.style.left = `${(lane / lanes) * 100}%`;
+        el.style.width = `calc(${(1 / lanes) * 100}% - 4px)`;
+        el.style.right = "auto";
+        el.textContent = `${ev.start_time} ${ev.title}`;
+        el.addEventListener("click", (e2) => { e2.stopPropagation(); selectSchedDate(dateStr); });
+        col.appendChild(el);
+      });
+
+      col.addEventListener("click", () => selectSchedDate(dateStr));
+      colsEl.appendChild(col);
+    });
+
+    // 曜日ヘッダ（週表示のみ）
+    let headRow = document.getElementById("tg-headrow");
+    if (!headRow){
+      headRow = document.createElement("div");
+      headRow.id = "tg-headrow"; headRow.className = "tg-headrow";
+      document.getElementById("tg-allday").before(headRow);
+    }
+    headRow.style.gridTemplateColumns = `repeat(${dayCount}, 1fr)`;
+    headRow.innerHTML = days.map(d => {
+      const isToday = ymd(d) === today;
+      return `<div class="tg-colhead${isToday ? " today" : ""}">${SCHED_DOW[(d.getDay()+6)%7]} ${d.getDate()}</div>`;
+    }).join("");
+    headRow.style.display = dayCount === 7 ? "grid" : "none";
+  }
+
+  // 重なる予定を横に並べるためのレーン割り当て（貪欲法）
+  function layoutLanes(events){
+    const sorted = events.slice().sort((a,b) => toMinutes(a.start_time) - toMinutes(b.start_time));
+    const laneEnd = [];   // レーンごとの終了時刻
+    const assigned = sorted.map(ev => {
+      const s = toMinutes(ev.start_time);
+      let e = ev.end_time ? toMinutes(ev.end_time) : s + 60;
+      if (e <= s) e = TG_END_HOUR * 60;
+      let lane = laneEnd.findIndex(end => end <= s);
+      if (lane === -1){ lane = laneEnd.length; laneEnd.push(e); } else { laneEnd[lane] = e; }
+      return { ev, lane };
+    });
+    const lanes = Math.max(1, laneEnd.length);
+    return assigned.map(a => ({ ...a, lanes }));
+  }
+
+  function selectSchedDate(dateStr){
+    schedSelectedDate = dateStr;
+    if (schedView === "month") renderMonthView();
     const panel = document.getElementById("sched-day-detail");
-    const items = (schedEventsByDate[dateStr] || []).slice().sort((a,b) => (a.start_time||"").localeCompare(b.start_time||""));
-    if (!items.length){ panel.style.display = "none"; return; }
+    const items = schedEventsByDate[dateStr] || [];
     panel.style.display = "block";
     document.getElementById("sched-dd-title").textContent = dateStr + " の予定";
     const wrap = document.getElementById("sched-dd-items");
     wrap.innerHTML = "";
+    if (!items.length){
+      wrap.innerHTML = '<p class="empty" style="padding:8px 0;">予定はありません。</p>';
+    }
     items.forEach(ev => {
       const d = document.createElement("div");
       d.className = "dd-item " + (FAMILY_DOT_CLASS[ev.family_type] || "personal");
       const time = ev.start_time ? `${ev.start_time}${ev.end_time ? "–"+ev.end_time : ""} / ` : "";
       const amount = ev.amount ? `（${fmtYen(ev.amount)}）` : "";
-      d.innerHTML = `<span class="note" style="display:inline;">${FAMILY_LABEL[ev.family_type] || ""}</span> ${time}${escapeHtml(ev.title)}${amount}`;
+      const pendingMark = ev.pending ? '<span class="note" style="display:inline;">（同期待ち）</span>' : "";
+      d.innerHTML = `<span class="note" style="display:inline;">${FAMILY_LABEL[ev.family_type] || ""}</span> ${time}${escapeHtml(ev.title)}${amount}${pendingMark}`;
       wrap.appendChild(d);
     });
   }
+
+  // ---- 予定の追加 ----
+  const saCard = document.getElementById("sched-add-card");
+  const saAllday = document.getElementById("sa-allday");
+  const saTimeRow = document.getElementById("sa-time-row");
+
+  document.getElementById("sched-add-here").addEventListener("click", () => openSchedAdd(schedSelectedDate));
+  document.getElementById("sa-cancel").addEventListener("click", () => { saCard.style.display = "none"; });
+  saAllday.addEventListener("change", () => {
+    saTimeRow.style.display = saAllday.checked ? "none" : "grid";
+    if (saAllday.checked){ document.getElementById("sa-start").value = ""; document.getElementById("sa-end").value = ""; }
+  });
+
+  function openSchedAdd(dateStr){
+    saCard.style.display = "block";
+    document.getElementById("sa-date").value = dateStr || ymd(new Date());
+    document.getElementById("sa-title").value = "";
+    document.getElementById("sa-note").value = "";
+    document.getElementById("sa-status").textContent = "";
+    saCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  document.getElementById("form-sched-add").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById("sa-submit");
+    btn.disabled = true;
+    const isAllday = saAllday.checked;
+    const row = {
+      date: document.getElementById("sa-date").value,
+      start_time: isAllday ? null : (document.getElementById("sa-start").value || null),
+      end_time: isAllday ? null : (document.getElementById("sa-end").value || null),
+      title: document.getElementById("sa-title").value.trim(),
+      note: document.getElementById("sa-note").value.trim(),
+      status: "confirmed",
+      confirmed_at: new Date().toISOString(),
+    };
+    const { error } = await sb.from("pending_personal_plans").insert(row);
+    if (error){
+      document.getElementById("sa-status").textContent = "追加に失敗しました: " + error.message;
+    } else {
+      // その場でカレンダーにも反映（同期待ちとして破線表示）
+      (schedEventsByDate[row.date] ||= []).push({
+        date: row.date, title: row.title, family_type: "personal",
+        start_time: row.start_time, end_time: row.end_time, amount: null, pending: true,
+      });
+      schedEventsByDate[row.date].sort((a,b) => (a.start_time || "").localeCompare(b.start_time || ""));
+      renderSchedule();
+      selectSchedDate(row.date);
+      saCard.style.display = "none";
+    }
+    btn.disabled = false;
+  });
 
   // ---- レシートOCR ----
   const receiptFile = document.getElementById("receipt-file");
