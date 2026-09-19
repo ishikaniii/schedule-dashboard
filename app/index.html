@@ -211,6 +211,43 @@
       <ul class="list" id="agenda-list"><li class="empty">まだ同期されていません。</li></ul>
     </div>
     <div class="card">
+      <h2><span class="dot goals"></span>写真・スクリーンショットから予定を追加</h2>
+      <div class="field">
+        <label for="plan-file">予定の写真・スクリーンショット</label>
+        <input type="file" id="plan-file" accept="image/*">
+      </div>
+      <img id="plan-preview" class="ocr-preview">
+      <div class="ocr-status" id="plan-ocr-status"></div>
+      <form id="form-plan" style="display:none;">
+        <div class="field">
+          <label for="p-title">予定名</label>
+          <input type="text" id="p-title" required>
+        </div>
+        <div class="field">
+          <label for="p-date">日付</label>
+          <input type="date" id="p-date" required>
+        </div>
+        <div class="field">
+          <label><input type="checkbox" id="p-allday"> 時刻を指定しない（終日の予定）</label>
+        </div>
+        <div class="row2" id="p-time-row">
+          <div class="field">
+            <label for="p-start">開始</label>
+            <input type="text" id="p-start" placeholder="HH:MM">
+          </div>
+          <div class="field">
+            <label for="p-end">終了</label>
+            <input type="text" id="p-end" placeholder="HH:MM">
+          </div>
+        </div>
+        <div class="field">
+          <label for="p-note">メモ</label>
+          <textarea id="p-note" rows="2"></textarea>
+        </div>
+        <button type="submit" class="submit goals" id="p-submit">予定を追加</button>
+      </form>
+    </div>
+    <div class="card">
       <h2>未確認の支出<span class="tag" id="pending-count"></span></h2>
       <ul class="list" id="pending-list"><li class="empty">未確認の支出はありません。</li></ul>
     </div>
@@ -226,7 +263,10 @@
       <h2><span class="dot budget"></span>レシートから記録</h2>
       <div class="field">
         <label for="receipt-file">レシート写真</label>
-        <input type="file" id="receipt-file" accept="image/*" capture="environment">
+        <!-- capture="environment"を付けるとカメラ起動が強制され、スクリーン
+             ショットや写真アプリからの選択ができなくなるため外している
+             （2026-09-19）。端末側でカメラ/アルバムどちらか選べる。 -->
+        <input type="file" id="receipt-file" accept="image/*">
       </div>
       <img id="receipt-preview" class="ocr-preview">
       <div class="ocr-status" id="ocr-status"></div>
@@ -576,6 +616,132 @@
       ocrStatus.textContent = "読み取りに失敗しました。手入力してください。";
       formReceipt.style.display = "block";
     }
+  });
+
+  // ---- 予定の写真・スクリーンショットOCR（2026-09-19追加） ----
+  // レシートの金額推測よりさらに不確実（予定のスクショは書式が定まらない
+  // ため）。見つかった範囲だけ仮入力し、必ず本人の確認を経てから送信する
+  // という同じ原則を徹底する——特にタイトルは「それっぽい1行目」を拾う
+  // だけの弱い推測なので、空欄のままでも構わない前提でUIを作る。
+  const planFile = document.getElementById("plan-file");
+  const planPreview = document.getElementById("plan-preview");
+  const planOcrStatus = document.getElementById("plan-ocr-status");
+  const formPlan = document.getElementById("form-plan");
+  const pAllday = document.getElementById("p-allday");
+  const pTimeRow = document.getElementById("p-time-row");
+
+  pAllday.addEventListener("change", () => {
+    pTimeRow.style.display = pAllday.checked ? "none" : "grid";
+    if (pAllday.checked){ document.getElementById("p-start").value = ""; document.getElementById("p-end").value = ""; }
+  });
+
+  function guessDateFromText(text){
+    const today = new Date();
+    let m = text.match(/(\d{4})[-\/年](\d{1,2})[-\/月](\d{1,2})/);
+    if (m) return { y: parseInt(m[1],10), mo: parseInt(m[2],10), d: parseInt(m[3],10) };
+    m = text.match(/(\d{1,2})[\/月](\d{1,2})\s*日?/);
+    if (m){
+      const mo = parseInt(m[1],10), d = parseInt(m[2],10);
+      if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31){
+        let y = today.getFullYear();
+        const candidate = new Date(y, mo - 1, d);
+        // 3日以上前の日付なら「今年の話ではなく来年」とみなす
+        // （少し前の過去日を許容するのは、当日撮ったスクショの表記ゆれ対策）。
+        if (candidate < new Date(today.getFullYear(), today.getMonth(), today.getDate() - 3)) y += 1;
+        return { y, mo, d };
+      }
+    }
+    return null;
+  }
+
+  function guessTimeRangeFromText(text){
+    let m = text.match(/(\d{1,2}):(\d{2})\s*[-〜～ー─~]\s*(\d{1,2}):(\d{2})/);
+    if (m) return { start: `${m[1].padStart(2,"0")}:${m[2]}`, end: `${m[3].padStart(2,"0")}:${m[4]}` };
+    m = text.match(/(\d{1,2}):(\d{2})/);
+    if (m) return { start: `${m[1].padStart(2,"0")}:${m[2]}`, end: null };
+    return null;
+  }
+
+  function guessTitleFromText(text){
+    const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
+    for (const line of lines){
+      if (/^[\d\s:\/\-〜～年月日,、。.]+$/.test(line)) continue; // 数字・記号だけの行は飛ばす
+      if (line.length < 2) continue;
+      return line.slice(0, 40);
+    }
+    return "";
+  }
+
+  planFile.addEventListener("change", async () => {
+    const file = planFile.files[0];
+    if (!file) return;
+    planPreview.src = URL.createObjectURL(file);
+    planPreview.style.display = "block";
+    formPlan.style.display = "none";
+    planOcrStatus.textContent = "文字を読み取っています...";
+    try{
+      const result = await Tesseract.recognize(file, "jpn+eng", {
+        logger: m => { if (m.status === "recognizing text") planOcrStatus.textContent = `読み取り中... ${Math.round(m.progress*100)}%`; }
+      });
+      const text = result.data.text || "";
+      const dateGuess = guessDateFromText(text);
+      const timeGuess = guessTimeRangeFromText(text);
+      const titleGuess = guessTitleFromText(text);
+
+      const msgs = [];
+      if (dateGuess){
+        const dateStr = `${dateGuess.y}-${String(dateGuess.mo).padStart(2,"0")}-${String(dateGuess.d).padStart(2,"0")}`;
+        document.getElementById("p-date").value = dateStr;
+        msgs.push(`日付の候補: ${dateGuess.mo}/${dateGuess.d}`);
+      } else {
+        document.getElementById("p-date").value = new Date().toISOString().slice(0,10);
+        msgs.push("日付を読み取れませんでした（今日の日付を仮入力）");
+      }
+      if (timeGuess){
+        document.getElementById("p-start").value = timeGuess.start;
+        document.getElementById("p-end").value = timeGuess.end || "";
+        pAllday.checked = false;
+        pTimeRow.style.display = "grid";
+        msgs.push(`時刻の候補: ${timeGuess.start}${timeGuess.end ? "〜"+timeGuess.end : ""}`);
+      } else {
+        pAllday.checked = true;
+        pTimeRow.style.display = "none";
+        msgs.push("時刻を読み取れませんでした（終日予定を仮選択）");
+      }
+      document.getElementById("p-title").value = titleGuess;
+      if (!titleGuess) msgs.push("予定名は空欄です、入力してください");
+
+      planOcrStatus.textContent = msgs.join(" / ") + "（下で必ず確認・修正してください）";
+      formPlan.style.display = "block";
+    }catch(err){
+      document.getElementById("p-date").value = new Date().toISOString().slice(0,10);
+      planOcrStatus.textContent = "読み取りに失敗しました。手入力してください。";
+      formPlan.style.display = "block";
+    }
+  });
+
+  formPlan.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById("p-submit");
+    btn.disabled = true;
+    const isAllday = pAllday.checked;
+    const { error } = await sb.from("pending_personal_plans").insert({
+      date: document.getElementById("p-date").value,
+      start_time: isAllday ? null : (document.getElementById("p-start").value.trim() || null),
+      end_time: isAllday ? null : (document.getElementById("p-end").value.trim() || null),
+      title: document.getElementById("p-title").value.trim(),
+      note: document.getElementById("p-note").value.trim(),
+      status: "confirmed",
+      confirmed_at: new Date().toISOString(),
+    });
+    if (error){ showBanner("予定の追加に失敗しました: " + error.message); }
+    else {
+      formPlan.reset(); formPlan.style.display = "none";
+      planPreview.style.display = "none"; planFile.value = "";
+      pTimeRow.style.display = "grid";
+      planOcrStatus.textContent = "追加しました。次回の同期でカレンダーに反映されます。";
+    }
+    btn.disabled = false;
   });
 
   function guessTotalAmount(text){
