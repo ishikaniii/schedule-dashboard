@@ -158,6 +158,23 @@
   .budget-nums{ display:flex; justify-content:space-between; font-size:12.5px; color:var(--ink-dim); }
   .budget-nums .now{ color:var(--ink); font-family:"IBM Plex Mono",monospace; font-weight:600; }
 
+  /* カテゴリ別の内訳（旧スケジュールボードのメーター表示と同じ考え方、2026-09-19追加） */
+  .cat-list{ margin-top:14px; padding-top:12px; border-top:1px solid var(--border); display:flex; flex-direction:column; gap:10px; }
+  .cat-row{ display:grid; grid-template-columns:4.6rem 1fr auto; align-items:center; gap:10px; }
+  .cat-label{ font-size:12.5px; color:var(--ink); }
+  .cat-track{ position:relative; height:9px; border-radius:999px; overflow:hidden; background:var(--cardio-soft); }
+  .cat-track.state-warn{ background:var(--budget-soft); }
+  .cat-track.state-critical{ background:var(--strength-soft); }
+  .cat-track.state-uncapped{ background:var(--surface-2); }
+  .cat-fill{ position:absolute; inset:0; border-radius:999px; background:var(--cardio); }
+  .cat-track.state-warn .cat-fill{ background:var(--budget); }
+  .cat-track.state-critical .cat-fill{ background:var(--strength); }
+  .cat-track.state-uncapped .cat-fill{ background:var(--ink-dim); opacity:.5; }
+  .cat-value{ font-family:"IBM Plex Mono",monospace; font-size:11.5px; color:var(--ink-dim); white-space:nowrap; text-align:right; }
+  .cat-pct{ display:block; color:var(--ink); font-weight:600; }
+  .cat-nocap{ display:block; }
+  @media (max-width:480px){ .cat-row{ grid-template-columns:1fr; row-gap:4px; } .cat-value{ text-align:left; } }
+
   .ocr-preview{ max-width:100%; border-radius:10px; margin:10px 0; display:none; }
   .ocr-status{ font-size:12.5px; color:var(--ink-dim); margin:6px 0; }
 </style>
@@ -528,12 +545,34 @@
 
     const budgetEl = document.getElementById("budget-summary");
     if (snap && snap.budget){
-      const { spent, cap, remaining } = snap.budget;
+      const { spent, cap, remaining, categories, warn_threshold_pct } = snap.budget;
       const pct = cap ? Math.min(100, Math.round((spent/cap)*100)) : 0;
+      const threshold = warn_threshold_pct || 80;
+
+      const catRows = (categories || []).map(c => {
+        if (c.pct_used == null){
+          // 上限なしのカテゴリ（貯金・旅行・固定費など）— バーは満タン表示、
+          // 金額のみ、色は良し悪しの判定をしない中立色にする。
+          return `<div class="cat-row">
+            <div class="cat-label">${escapeHtml(c.category)}</div>
+            <div class="cat-track state-uncapped"><div class="cat-fill" style="width:100%"></div></div>
+            <div class="cat-value">${fmtYen(c.spent)}<span class="cat-nocap">上限なし</span></div>
+          </div>`;
+        }
+        const state = c.pct_used >= 100 ? "state-critical" : (c.pct_used >= threshold ? "state-warn" : "state-good");
+        const fillW = Math.min(c.pct_used, 100);
+        return `<div class="cat-row">
+          <div class="cat-label">${escapeHtml(c.category)}</div>
+          <div class="cat-track ${state}"><div class="cat-fill" style="width:${fillW}%"></div></div>
+          <div class="cat-value">${fmtYen(c.spent)} / ${fmtYen(c.budget)}<span class="cat-pct">${c.pct_used}%</span></div>
+        </div>`;
+      }).join("");
+
       budgetEl.innerHTML = `
         <div class="budget-nums"><span>使用額</span><span class="now">${fmtYen(spent)}${cap ? " / " + fmtYen(cap) : ""}</span></div>
         <div class="budget-bar"><div class="fill" style="width:${pct}%"></div></div>
-        ${remaining != null ? `<div class="budget-nums"><span>残り</span><span class="now">${fmtYen(remaining)}</span></div>` : ""}`;
+        ${remaining != null ? `<div class="budget-nums"><span>残り</span><span class="now">${fmtYen(remaining)}</span></div>` : ""}
+        ${catRows ? `<div class="cat-list">${catRows}</div>` : ""}`;
     } else {
       budgetEl.innerHTML = '<p class="empty">まだ同期されていません。PC側の同期スクリプトの実行を待っています。</p>';
     }
