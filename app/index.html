@@ -175,13 +175,15 @@
   }
 
   /* 種目ボタンと3Dモデルを左右に並べる（選んだ瞬間に横で光るように） */
-  .picker-split{ display:grid; grid-template-columns:1fr 150px; gap:10px; align-items:start; margin-bottom:8px; }
-  @media (max-width:520px){ .picker-split{ grid-template-columns:1fr 122px; } }
+  .picker-split{ display:grid; grid-template-columns:1fr 170px; gap:10px; align-items:start; margin-bottom:8px; }
+  @media (max-width:520px){ .picker-split{ grid-template-columns:1fr 130px; } }
   .picker-split .ex-buttons{ margin-bottom:0; max-height:250px; }
   .body-mini{ display:flex; flex-direction:column; align-items:center; gap:4px; }
   .body-wrap{ width:100%; min-height:200px; display:flex; justify-content:center; }
   .body-wrap canvas{ display:block; cursor:grab; }
   .body-wrap canvas:active{ cursor:grabbing; }
+  .credit{ font-size:10.5px; color:var(--ink-dim); line-height:1.5; margin:18px 4px 4px; }
+  .credit a{ color:var(--ink-dim); }
   .body-hint{ font-size:10.5px; color:var(--ink-dim); text-align:center; line-height:1.3; }
   .body-turns{ display:flex; gap:4px; }
   .body-turns button{
@@ -317,6 +319,7 @@
      生やす最後期の版で、OrbitControlsなどの別ファイルを足さなくても
      素のTHREEだけで完結する（回転は自前のドラッグ処理で実装）。 -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="body3d.js"></script>
 </head>
 <body>
 
@@ -652,6 +655,11 @@
       </div>
     </div>
   </section>
+  <p class="credit">3Dモデル：<a href="https://github.com/slfresh/fitmitwith-anatomy-atlas" target="_blank" rel="noopener">Fit Mit With Anatomy Atlas</a>（筋肉以外の部位の非表示・メッシュの軽量化などの改変あり）／
+    「Z-Anatomy - The libre 3D atlas of anatomy - CC-BY-SA 4.0」 <a href="https://github.com/Z-Anatomy/Models-of-human-anatomy" target="_blank" rel="noopener">Z-Anatomy</a> ／
+    「BodyParts3D, © The Database Center for Life Science licensed under CC Attribution-Share Alike 2.1 Japan」
+    <a href="https://creativecommons.org/licenses/by-sa/4.0/deed.ja" target="_blank" rel="noopener">ライセンス: CC BY-SA 4.0</a>（モデルファイルのみ）。
+    色は筋活動の測定値ではなく、種目からの推定です。</p>
 </div>
 </div>
 
@@ -1527,288 +1535,23 @@
   const rpeInput = document.getElementById("s-rpe");
   rpeInput.addEventListener("input", () => { document.getElementById("s-rpe-readout").textContent = rpeInput.value; });
 
-  // ---- 人体モデル（Three.jsによる3D表示、2026-09-19。同日後半にマネキン風
-  // の滑らかな一体成形へ作り直し） ----
-  // 外部の3Dモデルファイルは読み込まない（ライセンスが確かで、かつ筋肉ごとに
-  // 独立して色を変えられる無料モデルはほぼ存在しないため、自前で組む方が
-  // 確実——検討の経緯はユーザーとの会話を参照）。
-  //
-  // 「箱・円柱を並べたロボット」から「マネキンのような滑らかな一体成形」に
-  // 見た目を変えるため、胴体・骨盤・腕・脚の芯は THREE.LatheGeometry
-  // （断面の輪郭線を軸周りに回転させて滑らかな回転体を作る手法——ろくろで
-  // 陶器を挽くのと同じ原理で、マネキンの成形そのもの）で構成する。筋肉は
-  // その滑らかな芯の上に、高分割の楕円体をなだらかに食い込ませて重ねる
-  // ことで、輪郭に継ぎ目が出ないようにしている。色分けの仕組み（メッシュを
-  // 筋肉IDごとに BODY.meshes に集めておく）は変えていない。
-  const BODY = { meshes: {}, group: null, ready: false };
-
-  // 断面プロファイル（[半径, 高さ]の配列）からLatheGeometryを作る。
-  // segments を高くするほど輪郭が丸くなる（デフォルト32分割）。
-  function latheGeo(profile, segments){
-    const pts = profile.map(([r, y]) => new THREE.Vector2(Math.max(r, 0.0001), y));
-    const geo = new THREE.LatheGeometry(pts, segments || 32);
-    geo.computeVertexNormals();
-    return geo;
+  // ---- 人体モデル（解剖学的3Dモデル、body3d.js） ----
+  // 2026-09-20: 自作プリミティブから、筋肉ごとにメッシュが分かれた外部の解剖
+  // モデル（CC BY-SA、フッターにクレジット）へ切り替えた。読み込み・色分けの
+  // 対応表・ドラッグ回転は body3d.js 側。ここでは BODY.meshes[筋肉ID] に色を
+  // 塗る renderBody() と、正面/背面ボタンだけを担当する。
+  let BODY = { meshes: {}, group: null, ready: false };
+  {
+    const created = window.LifeBody && LifeBody.create(document.getElementById("body-wrap"), {
+      height: 330,
+      onReady: (b) => { BODY = b; renderBody(); },
+    });
+    if (!created) document.getElementById("body-wrap").innerHTML =
+      '<p class="empty">3D表示を読み込めませんでした（部位バランスの一覧は下に表示されます）。</p>';
+    else BODY = created;
   }
-
-  function buildBodyModel(container){
-    if (typeof THREE === "undefined") return false;
-    const W = container.clientWidth || 240, H = 300;
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(30, W / H, 0.1, 100);
-    camera.position.set(0, 0.2, 9.8);
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.setSize(W, H);
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    container.innerHTML = "";
-    container.appendChild(renderer.domElement);
-
-    // スタジオ写真のような、上からの柔らかい光＋正面の主光源＋背後のリム光。
-    // マネキンらしいマットな質感はMeshStandardMaterialのroughnessで作る。
-    scene.add(new THREE.HemisphereLight(0xffffff, 0xc9c2b4, 0.55));
-    const key = new THREE.DirectionalLight(0xffffff, 0.9);
-    key.position.set(3, 6, 6); key.castShadow = true;
-    key.shadow.mapSize.set(512, 512);
-    key.shadow.camera.left = -3; key.shadow.camera.right = 3;
-    key.shadow.camera.top = 3; key.shadow.camera.bottom = -3;
-    scene.add(key);
-    const fill = new THREE.DirectionalLight(0xffffff, 0.28); fill.position.set(-4, 1, 4); scene.add(fill);
-    const rim = new THREE.DirectionalLight(0xffffff, 0.4); rim.position.set(-2, 3, -6); scene.add(rim);
-
-    const group = new THREE.Group();
-    scene.add(group);
-
-    // 接地の柔らかい影（本物の床影計算より軽量で、常に安定して見える）。
-    const shadowTex = (() => {
-      const c = document.createElement("canvas"); c.width = c.height = 128;
-      const ctx = c.getContext("2d");
-      const g = ctx.createRadialGradient(64, 64, 4, 64, 64, 62);
-      g.addColorStop(0, "rgba(0,0,0,0.32)"); g.addColorStop(1, "rgba(0,0,0,0)");
-      ctx.fillStyle = g; ctx.fillRect(0, 0, 128, 128);
-      return new THREE.CanvasTexture(c);
-    })();
-    const shadowBlob = new THREE.Mesh(
-      new THREE.PlaneGeometry(1.5, 1.5),
-      new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, depthWrite: false })
-    );
-    shadowBlob.rotation.x = -Math.PI / 2;
-    shadowBlob.position.y = -1.3;
-    group.add(shadowBlob);
-
-    const MANNEQUIN = 0xdcd6c7;  // マットなアイボリー（マネキン基調色）
-    BODY.baseColor = { r: (MANNEQUIN>>16)&255, g: (MANNEQUIN>>8)&255, b: MANNEQUIN&255 };
-    const add = (geo, x, y, z, muscleId) => {
-      const mat = new THREE.MeshStandardMaterial({ color: MANNEQUIN, roughness: 0.62, metalness: 0.04 });
-      const mesh = new THREE.Mesh(geo, mat);
-      mesh.position.set(x, y, z);
-      mesh.castShadow = true; mesh.receiveShadow = true;
-      group.add(mesh);
-      if (muscleId) (BODY.meshes[muscleId] = BODY.meshes[muscleId] || []).push(mesh);
-      return mesh;
-    };
-    // 高分割の楕円体。筋肉の「膨らみ」に使うが、2026-09-19後半の見直しで
-    // 分かった通り、球をそのまま置くと団子のように見える。ここから先は
-    // 「奥行き(z/depthの引数)を意図的に浅くして体表に貼りついた膨らみに
-    // する」「細長い筋肉は楕円体ではなくfusiform（紡錘形）のLatheで筋腹を
-    // 表現する」という2つの方針で作り直している。
-    const bump = (rx, ry, rz) => {
-      const geo = new THREE.SphereGeometry(1, 28, 20);
-      geo.scale(rx, ry, rz);
-      geo.computeVertexNormals();
-      return geo;
-    };
-    // 紡錘形の筋肉（上腕二頭筋・大腿四頭筋など）：中央が一番太く、
-    // 腱に向かって両端が細くすぼまる。楕円体だと「ソーセージ」のような
-    // 均一な太さになってしまうのに対し、これは実際の筋腹の形に近い。
-    // profileは中心(0)からの相対高さ。lenで全長、peakYで一番太い位置
-    // （0=中央、負=下寄り）、peakRで最大半径を指定する。
-    const fusiform = (len, peakR, peakY, segments) => {
-      const halfLen = len / 2;
-      const p = [
-        [0, halfLen],
-        [peakR * 0.35, halfLen - len * 0.14],
-        [peakR * 0.85, peakY + len * 0.14],
-        [peakR,        peakY],
-        [peakR * 0.82, peakY - len * 0.16],
-        [peakR * 0.32, -halfLen + len * 0.10],
-        [0, -halfLen],
-      ];
-      return latheGeo(p, segments || 20);
-    };
-    // 扁平に潰した紡錘形（広背筋・僧帽筋のような「面」の筋肉に、少しだけ
-    // 立体感を持たせる時に使う）。
-    const flatFusiform = (len, peakR, peakY, flatten, segments) => {
-      const geo = fusiform(len, peakR, peakY, segments);
-      geo.scale(1, 1, flatten);
-      geo.computeVertexNormals();
-      return geo;
-    };
-
-    // ============ 芯（体幹・骨盤・首・頭）— 1本の回転体で滑らかに ============
-    // 肩幅→胸→ウエスト→腰→股までを1本のLatheGeometryにすることで、
-    // パーツの継ぎ目そのものを無くしている。2026-09-19後半、「丸すぎる」
-    // という指摘を受けてウエストを絞り、肩と骨盤の差を出して
-    // アスレチックなV字シルエットに調整した（円柱に近い前バージョンより
-    // 全体の半径も一回り絞ってある）。
-    const torsoProfile = [
-      [0.00, 2.06], [0.098, 2.04], [0.118, 1.98],
-      [0.205, 1.905],
-      [0.215, 1.72], [0.205, 1.50], [0.182, 1.32],
-      [0.158, 1.16],
-      [0.168, 1.00], [0.188, 0.82], [0.198, 0.62],
-      [0.183, 0.42], [0.148, 0.20], [0.078, 0.02],
-      [0.00, -0.08],
-    ];
-    add(latheGeo(torsoProfile, 44), 0, 0, 0);
-
-    const neckProfile = [[0.00,0.30],[0.088,0.29],[0.098,0.10],[0.094,0.0],[0.00,0.0]];
-    add(latheGeo(neckProfile, 32), 0, 2.06, 0);
-
-    // 頭：楕円体を横に少しだけ長くする（卵形）。真球よりマネキンらしい。
-    // 体をスリムにした分、相対的に大きく見えないよう一回り小さくした。
-    add(bump(0.30, 0.365, 0.32), 0, 2.44, 0);
-
-    // ============ 筋肉（前面） ============
-    // 大胸筋：回転で「扇形」を狙ったところ、羽根のような不自然な向きに
-    // なる不具合が出た（2026-09-19、実機で発覚）。回転には頼らず、
-    // 楕円体を胸骨側に寄せて奥行きを浅く潰す方式に戻す——安全に
-    // 「体表に貼りついた薄い膨らみ」を再現できる。
-    add(bump(0.098, 0.088, 0.062), -0.128, 1.615, 0.155, "chest");
-    add(bump(0.098, 0.088, 0.062),  0.128, 1.615, 0.155, "chest");
-
-    // 腹筋：1枚の塊ではなく2列×3段の小さな膨らみに分け、腹直筋の分節を表現。
-    for (let row = 0; row < 3; row++){
-      const y = 1.28 - row * 0.135;
-      const rz = 0.135 - row * 0.006;
-      [-1, 1].forEach(s => {
-        add(bump(0.058, 0.058, 0.058), s * 0.062, y, rz, "abs");
-      });
-    }
-    // 腹斜筋：脇腹の細く縦長な帯。
-    [-1, 1].forEach(s => {
-      const obGeo = fusiform(0.34, 0.05, -0.02, 16);
-      obGeo.scale(1, 1, 0.55);
-      obGeo.computeVertexNormals();
-      const m = add(obGeo, s * 0.185, 1.07, 0.105, "obliques");
-      m.rotation.x = 0.12; m.rotation.z = s * 0.1;
-    });
-
-    // ============ 筋肉（背面） ============
-    // 僧帽筋：首の付け根から肩甲骨にかけて広がる、扁平な菱形。
-    {
-      const trapsGeo = bump(0.235, 0.155, 0.095);
-      trapsGeo.scale(1, 1, 1);
-      add(trapsGeo, 0, 1.83, -0.13, "traps");
-    }
-    // 広背筋：上が広く脇腹に向かって細くなる「翼」形。紡錘形を斜めに。
-    [-1, 1].forEach(s => {
-      const latsGeo = flatFusiform(0.42, 0.115, 0.10, 0.55, 18);
-      const m = add(latsGeo, s * 0.145, 1.38, -0.155, "lats");
-      m.rotation.z = s * 0.22;
-    });
-    add(bump(0.135, 0.115, 0.075), 0, 0.97, -0.15, "lower_back");
-    // 大臀筋：解剖学的にも丸みの強い筋肉なので、他よりは球形を残しつつ、
-    // 奥行きだけ抑えて「貼りついた丸み」にする。
-    add(bump(0.145, 0.155, 0.115), -0.135, 0.44, -0.135, "glutes");
-    add(bump(0.145, 0.155, 0.115),  0.135, 0.44, -0.135, "glutes");
-
-    [-1, 1].forEach(s => {
-      // ---- 肩・腕 ----
-      // 三角筋は前部・中部・後部が肩を包むように配置される。奥行きを
-      // 抑えた小さめのドームにして「団子」感を減らす。
-      add(bump(0.088, 0.10, 0.078), s * 0.255, 1.865, 0.068, "delts_front");
-      add(bump(0.10, 0.105, 0.095), s * 0.285, 1.885, 0, "delts_side");
-      add(bump(0.088, 0.10, 0.078), s * 0.255, 1.865, -0.078, "delts_rear");
-
-      // 上腕：回転体を「芯」として置き、その前後に紡錘形の二頭筋・三頭筋を
-      // 重ねる（回転体自体は色分けの対象外＝muscleIdを渡さない）。
-      // 体を絞った際に肩(delt)側の座標だけ調整して、腕の上端との間に
-      // 隙間が空いてしまっていた（2026-09-19、実機で発覚）。delt下端
-      // (約y=1.765〜1.78)にしっかり重なるよう、腕の位置を上げ、X位置も
-      // delt群の中心に合わせて寄せる。
-      const upperArmProfile = [[0.00,0.02],[0.088,0.0],[0.092,-0.18],[0.08,-0.36],[0.066,-0.50],[0.00,-0.52]];
-      add(latheGeo(upperArmProfile, 24), s * 0.275, 1.76, 0);
-      const bicepsGeo = fusiform(0.34, 0.062, 0.03, 16); bicepsGeo.scale(1,1,0.68); bicepsGeo.computeVertexNormals();
-      add(bicepsGeo, s * 0.275, 1.55, 0.048, "biceps");
-      const tricepsGeo = fusiform(0.34, 0.062, -0.02, 16); tricepsGeo.scale(1,1,0.68); tricepsGeo.computeVertexNormals();
-      add(tricepsGeo, s * 0.275, 1.55, -0.05, "triceps");
-
-      const forearmProfile = [[0.00,0.02],[0.072,0.0],[0.066,-0.20],[0.053,-0.40],[0.043,-0.48],[0.00,-0.49]];
-      add(latheGeo(forearmProfile, 24), s * 0.285, 1.23, 0);
-      const forearmMuscleGeo = fusiform(0.30, 0.058, 0.06, 16); forearmMuscleGeo.scale(1,1,0.72); forearmMuscleGeo.computeVertexNormals();
-      add(forearmMuscleGeo, s * 0.285, 1.05, 0, "forearms");
-
-      add(bump(0.047, 0.065, 0.030), s * 0.29, 0.69, 0);  // 手
-
-      // ---- 脚 ----
-      const thighProfile = [[0.00,0.02],[0.145,0.0],[0.155,-0.25],[0.14,-0.55],[0.118,-0.78],[0.10,-0.85],[0.00,-0.86]];
-      add(latheGeo(thighProfile, 28), s * 0.135, 0.30, 0);
-      const quadGeo = fusiform(0.72, 0.10, 0.10, 18); quadGeo.scale(1,1,0.72); quadGeo.computeVertexNormals();
-      add(quadGeo, s * 0.135, -0.06, 0.068, "quads");
-      const hamGeo = fusiform(0.68, 0.10, 0.04, 18); hamGeo.scale(1,1,0.72); hamGeo.computeVertexNormals();
-      add(hamGeo, s * 0.135, -0.06, -0.078, "hamstrings");
-      const addGeo = fusiform(0.62, 0.062, 0.06, 14); addGeo.scale(1,1,0.75); addGeo.computeVertexNormals();
-      add(addGeo, s * 0.062, -0.06, 0, "adductors");
-
-      const calfProfile = [[0.00,0.02],[0.098,0.0],[0.09,-0.22],[0.065,-0.45],[0.044,-0.60],[0.00,-0.61]];
-      add(latheGeo(calfProfile, 28), s * 0.135, -0.55, 0);
-      // 腓腹筋：ふくらはぎの上寄りで一番膨らみ、アキレス腱に向けて
-      // 急に細くなる——ここは特に「紡錘形」効果が分かりやすい部位。
-      const calfGeo = fusiform(0.46, 0.072, 0.09, 16); calfGeo.scale(1,1,0.78); calfGeo.computeVertexNormals();
-      add(calfGeo, s * 0.135, -0.80, -0.028, "calves");
-
-      // 足（甲を少し盛り上げた滑らかなくさび形）
-      // ふくらはぎの下端(y = -0.55 - 0.61 = -1.16)にきちんと繋がる位置に置く
-      // （2026-09-19、当初 -1.62 に置いてしまい足が宙に浮いていた不具合を
-      // 実機スクリーンショットで発見・修正）。
-      const footProfile = [[0.00,0.0],[0.066,0.0],[0.075,-0.035],[0.058,-0.08],[0.00,-0.09]];
-      const foot = add(latheGeo(footProfile, 24), s * 0.135, -1.14, 0.10);
-      foot.rotation.x = Math.PI / 2; foot.scale.set(1, 2.0, 1);
-    });
-
-    BODY.group = group;
-    BODY.ready = true;
-
-    // ドラッグ回転（OrbitControlsを足さずに済ませる簡易実装）
-    let dragging = false, lastX = 0, lastY = 0;
-    const el = renderer.domElement;
-    el.style.touchAction = "pan-y";   // 縦スクロールは殺さない
-    const down = (x, y) => { dragging = true; lastX = x; lastY = y; };
-    const move = (x, y) => {
-      if (!dragging) return;
-      group.rotation.y += (x - lastX) * 0.012;
-      group.rotation.x = Math.max(-0.6, Math.min(0.6, group.rotation.x + (y - lastY) * 0.006));
-      lastX = x; lastY = y;
-    };
-    const up = () => { dragging = false; };
-    el.addEventListener("mousedown", e => down(e.clientX, e.clientY));
-    window.addEventListener("mousemove", e => move(e.clientX, e.clientY));
-    window.addEventListener("mouseup", up);
-    el.addEventListener("touchstart", e => down(e.touches[0].clientX, e.touches[0].clientY), { passive: true });
-    el.addEventListener("touchmove", e => {
-      const t = e.touches[0];
-      if (Math.abs(t.clientX - lastX) > Math.abs(t.clientY - lastY)) { e.preventDefault(); move(t.clientX, t.clientY); }
-      else { lastX = t.clientX; lastY = t.clientY; }
-    }, { passive: false });
-    el.addEventListener("touchend", up);
-
-    (function loop(){ requestAnimationFrame(loop); renderer.render(scene, camera); })();
-    window.addEventListener("resize", () => {
-      const w = container.clientWidth || 240;
-      renderer.setSize(w, H); camera.aspect = w / H; camera.updateProjectionMatrix();
-    });
-    return true;
-  }
-
-  const bodyOk = buildBodyModel(document.getElementById("body-wrap"));
-  if (!bodyOk) document.getElementById("body-wrap").innerHTML =
-    '<p class="empty">3D表示を読み込めませんでした（部位バランスの一覧は下に表示されます）。</p>';
   document.querySelectorAll(".body-turn").forEach(btn => btn.addEventListener("click", () => {
-    if (!BODY.ready) return;
-    BODY.group.rotation.x = 0;
-    BODY.group.rotation.y = btn.dataset.turn === "back" ? Math.PI : 0;
+    if (BODY.turn) BODY.turn(btn.dataset.turn);
   }));
 
   let bodyRange = "selected";   // "selected" | "7" | "30"
