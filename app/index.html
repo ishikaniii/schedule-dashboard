@@ -571,6 +571,16 @@
             <input type="text" id="ev-title" required>
           </div>
           <div class="field">
+            <label for="ev-category">カテゴリ</label>
+            <select id="ev-category">
+              <option value="personal">私用</option>
+              <option value="shift">バイト</option>
+              <option value="class">授業</option>
+              <option value="assignment_due">締切</option>
+              <option value="health">健康（筋トレ・有酸素）</option>
+            </select>
+          </div>
+          <div class="field">
             <label for="ev-date">日付</label>
             <input type="date" id="ev-date" required>
           </div>
@@ -1110,7 +1120,8 @@
         ev = { ...ev0, edited: true, pending: true,
           date: ed.date || ev0.date, end_date: ed.end_date || null,
           start_time: ed.start_time || null, end_time: ed.end_time || null,
-          title: ed.title || ev0.title };
+          title: ed.title || ev0.title,
+          family_type: ed.new_family_type || ev0.family_type };
       }
       expandAcrossDays(ev).forEach(seg => { (schedEventsByDate[seg.date] ||= []).push(seg); });
     });
@@ -1438,17 +1449,22 @@
 
   async function saveEvent(src, vals){
     if (src.pending_id && !src.id){
-      const { data, error } = await sb.from("pending_personal_plans")
-        .update({ date: vals.date, start_time: vals.start_time, end_time: vals.end_time, title: vals.title })
+      const upd = { date: vals.date, start_time: vals.start_time, end_time: vals.end_time, title: vals.title };
+      if (vals.new_family_type) upd.family_type = vals.new_family_type;
+      let { data, error } = await sb.from("pending_personal_plans").update(upd)
         .eq("id", src.pending_id).eq("status", "confirmed").select();
+      if (error && /family_type/.test(error.message || "")) throw new Error("カテゴリの変更には、Supabaseで schema.sql の family_type 追加SQLの実行が必要です");
       if (error) throw new Error(error.message);
       if (!data || !data.length) throw new Error("この予定はすでにGoogleカレンダーに登録済みです。画面を更新してください。");
       Object.assign(src, { date: vals.date, title: vals.title, start_time: vals.start_time,
                            end_time: vals.end_time, end_date: vals.end_date });
+      if (vals.new_family_type) src.family_type = vals.new_family_type;
     } else if (src.id){
       const row = { event_id: src.id, family_type: src.family_type, op: "update", status: "confirmed",
         date: vals.date, end_date: vals.end_date, start_time: vals.start_time, end_time: vals.end_time, title: vals.title };
+      if (vals.new_family_type) row.new_family_type = vals.new_family_type;
       const { error } = await sb.from("pending_event_edits").insert(row);
+      if (error && /new_family_type/.test(error.message || "")) throw new Error("カテゴリの変更には、Supabaseで schema.sql の new_family_type 追加SQLの実行が必要です");
       if (error) throw new Error(error.message);
       schedEdits.push({ ...row, created_at: new Date().toISOString() });
     } else {
@@ -1563,6 +1579,7 @@
   // ---- 編集ダイアログ ----
   const evModal = document.getElementById("ev-modal");
   const evForm = document.getElementById("ev-form");
+  const evCategory = document.getElementById("ev-category");
   const evTitle = document.getElementById("ev-title"), evDate = document.getElementById("ev-date");
   const evAllday = document.getElementById("ev-allday"), evAlldayField = document.getElementById("ev-allday-field");
   const evTimeBlock = document.getElementById("ev-time-block");
@@ -1597,6 +1614,7 @@
     const hasTime = !!src.start_time;
 
     document.getElementById("ev-modal-title").textContent = `${FAMILY_LABEL[ft] || "予定"}を編集`;
+    evCategory.value = ft || "personal";
     evTitle.value = src.title || ""; evTitle.disabled = isShift;   // バイトの題名は時刻・見込み額から自動生成される
     evDate.value = src.date;
     evAllday.checked = !hasTime;
@@ -1628,10 +1646,11 @@
     e.preventDefault();
     const src = evEditing;
     if (!src) return;
-    const ft = src.family_type;
-    const title = ft === "shift" ? src.title : evTitle.value.trim();
+    const ft = evCategory.value;                       // 選択中のカテゴリ（変更されていれば新カテゴリ）
+    const title = src.family_type === "shift" ? src.title : evTitle.value.trim();
     const date = evDate.value;
     let vals;
+    if (ft === "shift" && evAllday.checked){ evStatus.textContent = "バイトには開始・終了時刻が必要です（終日のチェックを外してください）"; return; }
     if (ft === "assignment_due" || evAllday.checked){
       // 終日の複数日予定は元の日数を保ったまま日付だけ動かす
       let end_date = null;
@@ -1647,6 +1666,7 @@
       const daysAdd = origSpan >= 2 ? origSpan : (en <= st ? 1 : 0);   // 2日以上にまたがる予定は日数を保つ
       vals = { title, date, end_date: ymd(addDays(parseYmd(date), daysAdd)), start_time: st, end_time: en };
     }
+    if (ft !== src.family_type) vals.new_family_type = ft;
     evSave.disabled = true;
     try{
       await saveEvent(src, vals);
