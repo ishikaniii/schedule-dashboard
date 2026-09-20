@@ -271,6 +271,18 @@
   .tg-event.strength{ background:var(--strength); } .tg-event.shift{ background:var(--shift); }
   .tg-event.goals{ background:var(--goals); } .tg-event.personal{ background:var(--ink-dim); }
   .tg-event.pending{ opacity:.7; border:1px dashed rgba(255,255,255,.8); }
+  /* 予定のドラッグ移動・リサイズ、編集ダイアログ（2026-09-20） */
+  .tg-event{ user-select:none; -webkit-user-select:none; touch-action:manipulation; }
+  .tg-event.dragging{ opacity:.9; box-shadow:0 4px 14px rgba(0,0,0,.4); z-index:5; cursor:grabbing; }
+  .tg-event .tg-resize{ position:absolute; left:0; right:0; bottom:0; height:9px; cursor:ns-resize; }
+  .tg-event .tg-resize::after{ content:""; display:block; width:20px; height:2px; margin:4px auto 0; border-radius:2px; background:rgba(255,255,255,.75); }
+  .dd-item{ cursor:pointer; }
+  .evt-chip{ cursor:pointer; }
+  .ev-modal{ position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:50; display:flex; align-items:flex-start; justify-content:center; overflow-y:auto; padding:24px 12px; }
+  .ev-modal-card{ width:100%; max-width:440px; background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:16px; }
+  .ev-modal-card h2{ margin:0 0 12px; font-size:16px; }
+  .ev-modal input[type=range]{ width:100%; }
+  .sched-toast{ position:fixed; left:50%; bottom:24px; transform:translateX(-50%); background:var(--ink); color:var(--bg); padding:9px 14px; border-radius:9px; font-size:13px; z-index:60; max-width:90vw; text-align:center; }
 
   .status-banner{ background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:10px 12px; font-size:12.5px; color:var(--ink-dim); margin-bottom:16px; display:none; }
 
@@ -537,6 +549,53 @@
         </div>
         <div class="ocr-status" id="sa-status"></div>
       </form>
+    </div>
+
+    <!-- 予定の編集ダイアログ（2026-09-20） -->
+    <div class="ev-modal" id="ev-modal" style="display:none;">
+      <div class="ev-modal-card">
+        <h2 id="ev-modal-title">予定を編集</h2>
+        <form id="ev-form">
+          <div class="field">
+            <label for="ev-title">予定名</label>
+            <input type="text" id="ev-title" required>
+          </div>
+          <div class="field">
+            <label for="ev-date">日付</label>
+            <input type="date" id="ev-date" required>
+          </div>
+          <div class="field" id="ev-allday-field">
+            <label><input type="checkbox" id="ev-allday"> 時刻を指定しない（終日の予定）</label>
+          </div>
+          <div id="ev-time-block">
+            <div class="row2">
+              <div class="field">
+                <label for="ev-start">開始</label>
+                <input type="time" id="ev-start">
+              </div>
+              <div class="field">
+                <label for="ev-end">終了</label>
+                <input type="time" id="ev-end">
+              </div>
+            </div>
+            <div class="field">
+              <label for="ev-start-range">開始をスライドで動かす</label>
+              <input type="range" id="ev-start-range" min="0" max="1435" step="5">
+            </div>
+            <div class="field">
+              <label for="ev-end-range">終了をスライドで動かす</label>
+              <input type="range" id="ev-end-range" min="0" max="1435" step="5">
+            </div>
+          </div>
+          <div class="ocr-status" id="ev-note"></div>
+          <div class="row2">
+            <button type="submit" class="submit goals" id="ev-save">保存</button>
+            <button type="button" class="submit" id="ev-cancel" style="background:var(--surface-2);color:var(--ink);">キャンセル</button>
+          </div>
+          <button type="button" class="submit" id="ev-delete" style="background:#e5484d;margin-top:8px;">この予定を削除</button>
+          <div class="ocr-status" id="ev-status"></div>
+        </form>
+      </div>
     </div>
   </section>
 
@@ -928,6 +987,8 @@
   let schedAnchor = startOfDay(new Date());  // 表示中の期間の基準日
   let schedEventsByDate = {};
   let schedSelectedDate = null;
+  let schedRawEvents = [];   // 元の予定（Googleカレンダー由来＋アプリ追加の同期待ち）
+  let schedEdits = [];       // 未反映の編集・削除リクエスト
 
   function startOfDay(d){ const x = new Date(d); x.setHours(0,0,0,0); return x; }
   function ymd(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; }
@@ -978,16 +1039,17 @@
     if (ev.start_time && ev.end_time && endDate === ev.date && toMinutes(ev.end_time) <= toMinutes(ev.start_time)){
       endDate = ymd(addDays(parseYmd(ev.date), 1));
     }
-    if (endDate <= ev.date) return [ev];
+    // src：断片から元の予定（編集・ドラッグの対象）を辿るための参照
+    if (endDate <= ev.date) return [{ ...ev, src: ev }];
     const out = [];
     for (let d = parseYmd(ev.date); ymd(d) <= endDate && out.length < 40; d = addDays(d, 1)){
       const ds = ymd(d);
-      if (!ev.start_time){ out.push({ ...ev, date: ds }); continue; }
+      if (!ev.start_time){ out.push({ ...ev, date: ds, src: ev }); continue; }
       const first = ds === ev.date, last = ds === endDate;
       if (last && ev.end_time === "00:00") continue;
       out.push({ ...ev, date: ds,
         start_time: first ? ev.start_time : "00:00",
-        end_time: last ? ev.end_time : "24:00" });
+        end_time: last ? ev.end_time : "24:00", src: ev });
     }
     return out;
   }
@@ -1000,18 +1062,46 @@
     const events = (snap && snap.calendar_events) || [];
     document.getElementById("sched-empty").style.display = events.length ? "none" : "block";
 
-    // 同期待ちの追加分も取得してマージ
+    // 同期待ちの追加分も取得してマージ（pending_id＝アプリから直接編集・削除できる行）
     let pending = [];
     try{
       const { data: pendingRows } = await sb.from("pending_personal_plans").select("*").eq("status","confirmed");
       pending = (pendingRows || []).map(p => ({
-        date: p.date, title: p.title, family_type: "personal",
+        pending_id: p.id, date: p.date, title: p.title, family_type: "personal",
         start_time: p.start_time, end_time: p.end_time, amount: null, pending: true,
       }));
     }catch(e){ /* テーブル未作成などは無視（確定分だけ表示する） */ }
 
+    // まだPC側がGoogleカレンダーに反映していない編集・削除リクエスト
+    // （古い順）。再読込しても「変更済み・同期待ち」として見えるようにする。
+    let edits = [];
+    try{
+      const { data: editRows } = await sb.from("pending_event_edits").select("*")
+        .eq("status","confirmed").order("created_at", { ascending: true });
+      edits = editRows || [];
+    }catch(e){ /* テーブル未作成などは無視（編集なしとして表示する） */ }
+
+    schedRawEvents = [...events.map(e => ({ ...e })), ...pending];
+    schedEdits = edits;
+    rebuildSchedIndex();
+  }
+
+  // 元の予定に未反映の編集を重ねて、日付ごとの一覧を作り直す。
+  function rebuildSchedIndex(){
+    const latestEdit = new Map();   // event_id -> 最新の編集リクエスト
+    schedEdits.forEach(ed => latestEdit.set(ed.event_id, ed));
+
     schedEventsByDate = {};
-    [...events, ...pending].forEach(ev => {
+    schedRawEvents.forEach(ev0 => {
+      let ev = ev0;
+      const ed = ev0.id ? latestEdit.get(ev0.id) : null;
+      if (ed){
+        if (ed.op === "delete") return;
+        ev = { ...ev0, edited: true, pending: true,
+          date: ed.date || ev0.date, end_date: ed.end_date || null,
+          start_time: ed.start_time || null, end_time: ed.end_time || null,
+          title: ed.title || ev0.title };
+      }
       expandAcrossDays(ev).forEach(seg => { (schedEventsByDate[seg.date] ||= []).push(seg); });
     });
     Object.values(schedEventsByDate).forEach(list =>
@@ -1052,9 +1142,26 @@
       ).join("");
       const more = dayEvents.length > MAXB ? `<div class="evt-more">+${dayEvents.length-MAXB}</div>` : "";
       cell.innerHTML = `<div class="dnum">${d}</div>${shown}${more}`;
-      cell.addEventListener("click", () => selectSchedDate(dateStr));
+      // ダブルクリック／ダブルタップでその日の「日」表示へ（2026-09-20、
+      // ユーザー要望）。1回目のクリックで月グリッドを再描画するため、
+      // dblclickイベントだけに頼らず、2回目のクリックのdetail(>=2)でも判定する。
+      cell.style.touchAction = "manipulation";
+      cell.addEventListener("click", (e) => {
+        if (e.detail >= 2){ openSchedDay(dateStr); return; }
+        selectSchedDate(dateStr);
+      });
+      cell.addEventListener("dblclick", () => openSchedDay(dateStr));
       grid.appendChild(cell);
     }
+  }
+
+  function openSchedDay(dateStr){
+    schedView = "day";
+    schedAnchor = parseYmd(dateStr);
+    [...document.getElementById("sched-view-switch").children]
+      .forEach(b => b.classList.toggle("active", b.dataset.view === "day"));
+    renderSchedule();
+    selectSchedDate(dateStr);   // 下の「その日の予定」パネルも更新
   }
 
   // ---- 週/日表示：時間グリッド ----
@@ -1085,7 +1192,7 @@
         chip.className = `evt-chip ${FAMILY_DOT_CLASS[ev.family_type] || "personal"}${ev.pending ? " pending" : ""}`;
         chip.style.background = eventColor(ev);
         chip.textContent = (dayCount === 7 ? `${d.getMonth()+1}/${d.getDate()} ` : "") + ev.title;
-        chip.addEventListener("click", () => selectSchedDate(ymd(d)));
+        chip.addEventListener("click", () => openEventEditor(ev));
         alldayEl.appendChild(chip);
       });
     });
@@ -1124,11 +1231,19 @@
         el.style.width = `calc(${(1 / lanes) * 100}% - 4px)`;
         el.style.right = "auto";
         el.textContent = `${ev.start_time} ${ev.title}`;
-        el.addEventListener("click", (e2) => { e2.stopPropagation(); selectSchedDate(dateStr); });
+        attachEventInteractions(el, ev, dayCount);
         col.appendChild(el);
       });
 
       col.addEventListener("click", () => selectSchedDate(dateStr));
+      // 空きの時間帯をダブルクリック／ダブルタップで、その時刻から予定を追加
+      col.addEventListener("dblclick", (e2) => {
+        if (e2.target !== col && !e2.target.classList.contains("tg-lines") && !e2.target.classList.contains("tg-line")) return;
+        const y = e2.clientY - col.getBoundingClientRect().top;
+        const startMin = Math.min(Math.floor((y / TG_ROW_PX) * 60 / DRAG_SNAP_MIN) * DRAG_SNAP_MIN, 23*60 + 45);
+        selectSchedDate(dateStr, true);
+        openSchedAdd(dateStr, startMin);
+      });
       colsEl.appendChild(col);
     });
 
@@ -1171,13 +1286,14 @@
     return assigned.map(a => ({ ...a, lanes }));
   }
 
-  function selectSchedDate(dateStr){
+  function selectSchedDate(dateStr, keepAnchor){
     schedSelectedDate = dateStr;
     // クリックした日を基準日にしておく（2026-09-19、ユーザー要望）。
     // これで月表示で日付をタップ→「週」「日」に切り替えると、その日を
     // 含む週／その日そのものが開く。同じ月・同じ週の中での選択なら
     // 表示中の期間は変わらないので、画面が飛ぶことはない。
-    schedAnchor = parseYmd(dateStr);
+    // keepAnchor：編集の反映後にパネルだけ更新したいとき、表示期間を動かさない。
+    if (!keepAnchor) schedAnchor = parseYmd(dateStr);
     if (schedView === "month") renderMonthView();
     const panel = document.getElementById("sched-day-detail");
     const items = schedEventsByDate[dateStr] || [];
@@ -1194,8 +1310,9 @@
       d.style.borderLeftColor = eventColor(ev);
       const time = ev.start_time ? `${ev.start_time}${ev.end_time ? "–"+ev.end_time : ""} / ` : "";
       const amount = ev.amount ? `（${fmtYen(ev.amount)}）` : "";
-      const pendingMark = ev.pending ? '<span class="note" style="display:inline;">（同期待ち）</span>' : "";
+      const pendingMark = ev.pending ? `<span class="note" style="display:inline;">（${ev.edited ? "変更を同期待ち" : "同期待ち"}）</span>` : "";
       d.innerHTML = `<span class="note" style="display:inline;">${FAMILY_LABEL[ev.family_type] || ""}</span> ${time}${escapeHtml(ev.title)}${amount}${pendingMark}`;
+      d.addEventListener("click", () => openEventEditor(ev));   // クリックで編集
       wrap.appendChild(d);
     });
   }
@@ -1212,12 +1329,18 @@
     if (saAllday.checked){ document.getElementById("sa-start").value = ""; document.getElementById("sa-end").value = ""; }
   });
 
-  function openSchedAdd(dateStr){
+  function openSchedAdd(dateStr, startMin){
     saCard.style.display = "block";
     document.getElementById("sa-date").value = dateStr || ymd(new Date());
     document.getElementById("sa-title").value = "";
     document.getElementById("sa-note").value = "";
     document.getElementById("sa-status").textContent = "";
+    if (typeof startMin === "number"){   // 時間グリッドの空きをダブルクリックしたとき（開始時刻つき）
+      saAllday.checked = false;
+      saTimeRow.style.display = "grid";
+      document.getElementById("sa-start").value = fmtHM(startMin);
+      document.getElementById("sa-end").value = fmtHM(startMin + 60);
+    }
     saCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
 
@@ -1235,21 +1358,301 @@
       status: "confirmed",
       confirmed_at: new Date().toISOString(),
     };
-    const { error } = await sb.from("pending_personal_plans").insert(row);
+    const { data: inserted, error } = await sb.from("pending_personal_plans").insert(row).select();
     if (error){
       document.getElementById("sa-status").textContent = "追加に失敗しました: " + error.message;
     } else {
-      // その場でカレンダーにも反映（同期待ちとして破線表示）
-      (schedEventsByDate[row.date] ||= []).push({
+      // その場でカレンダーにも反映（同期待ちとして破線表示）。pending_idを持たせるので、
+      // 追加した直後からクリック編集・ドラッグ移動・削除ができる。
+      schedRawEvents.push({
+        pending_id: inserted && inserted[0] ? inserted[0].id : undefined,
         date: row.date, title: row.title, family_type: "personal",
         start_time: row.start_time, end_time: row.end_time, amount: null, pending: true,
       });
-      schedEventsByDate[row.date].sort((a,b) => (a.start_time || "").localeCompare(b.start_time || ""));
-      renderSchedule();
+      rebuildSchedIndex();
       selectSchedDate(row.date);
       saCard.style.display = "none";
     }
     btn.disabled = false;
+  });
+
+  // ---- 予定の編集・ドラッグ移動・削除（2026-09-20、ユーザー要望） ----
+  // ブラウザはGoogleカレンダーに直接書けないので、変更は「依頼」として保存し、
+  // 次回のPC側sync_supabase.pyがGoogleカレンダーへ反映する。
+  //   - アプリで追加した同期待ちの予定（pending_id）は pending_personal_plans を直接更新
+  //   - Googleカレンダー由来の予定（id）は pending_event_edits に編集/削除依頼をinsert
+  // 反映前は破線（同期待ち）で表示し、再読込しても未反映の依頼を重ねて表示する。
+  const DRAG_SNAP_MIN = 15;
+  function fmtHM(mins){
+    const m = ((mins % 1440) + 1440) % 1440;
+    return String(Math.floor(m/60)).padStart(2,"0") + ":" + String(m%60).padStart(2,"0");
+  }
+  // 予定の開始・終了を「開始日の0:00からの分」で表す（日付またぎは終了が1440超）
+  function eventSpan(src){
+    const s = toMinutes(src.start_time);
+    const dayOff = src.end_date ? Math.round((parseYmd(src.end_date) - parseYmd(src.date)) / 86400000) : 0;
+    let e = toMinutes(src.end_time || fmtHM(s + 60)) + dayOff * 1440;
+    if (e <= s) e += 1440;
+    return { s, e };
+  }
+  function spanToValues(src, s2, e2){
+    const at = (m) => ({ date: ymd(addDays(parseYmd(src.date), Math.floor(m / 1440))), hm: fmtHM(m) });
+    const st = at(s2), en = at(e2);
+    return { date: st.date, start_time: st.hm, end_date: en.date, end_time: en.hm };
+  }
+
+  // 再描画すると時間グリッドが「最初の予定」までスクロールし直されてしまうので、
+  // 編集・ドラッグの直後は見ていた位置を保つ。
+  function rebuildKeepingScroll(){
+    const wrap = document.querySelector(".tg-wrap");
+    const top = wrap ? wrap.scrollTop : 0;
+    rebuildSchedIndex();
+    if (wrap && schedView !== "month") wrap.scrollTop = top;
+  }
+
+  function schedToast(msg){
+    let t = document.getElementById("sched-toast");
+    if (!t){ t = document.createElement("div"); t.id = "sched-toast"; t.className = "sched-toast"; document.body.appendChild(t); }
+    t.textContent = msg; t.style.display = "block";
+    clearTimeout(t._h); t._h = setTimeout(() => { t.style.display = "none"; }, 3500);
+  }
+
+  async function saveEvent(src, vals){
+    if (src.pending_id && !src.id){
+      const { data, error } = await sb.from("pending_personal_plans")
+        .update({ date: vals.date, start_time: vals.start_time, end_time: vals.end_time, title: vals.title })
+        .eq("id", src.pending_id).eq("status", "confirmed").select();
+      if (error) throw new Error(error.message);
+      if (!data || !data.length) throw new Error("この予定はすでにGoogleカレンダーに登録済みです。画面を更新してください。");
+      Object.assign(src, { date: vals.date, title: vals.title, start_time: vals.start_time,
+                           end_time: vals.end_time, end_date: vals.end_date });
+    } else if (src.id){
+      const row = { event_id: src.id, family_type: src.family_type, op: "update", status: "confirmed",
+        date: vals.date, end_date: vals.end_date, start_time: vals.start_time, end_time: vals.end_time, title: vals.title };
+      const { error } = await sb.from("pending_event_edits").insert(row);
+      if (error) throw new Error(error.message);
+      schedEdits.push({ ...row, created_at: new Date().toISOString() });
+    } else {
+      throw new Error("この予定はまだ編集できません（PC側の同期が新しくなるまでお待ちください）");
+    }
+    rebuildKeepingScroll();
+    if (schedSelectedDate) selectSchedDate(schedSelectedDate, true);
+  }
+
+  async function deleteEvent(src){
+    if (src.pending_id && !src.id){
+      const { data, error } = await sb.from("pending_personal_plans").delete()
+        .eq("id", src.pending_id).eq("status", "confirmed").select();
+      if (error) throw new Error(error.message);
+      if (!data || !data.length) throw new Error("この予定はすでにGoogleカレンダーに登録済みです。画面を更新してください。");
+      schedRawEvents = schedRawEvents.filter(e => e !== src);
+    } else if (src.id){
+      const row = { event_id: src.id, family_type: src.family_type, op: "delete", status: "confirmed" };
+      const { error } = await sb.from("pending_event_edits").insert(row);
+      if (error) throw new Error(error.message);
+      schedEdits.push({ ...row, created_at: new Date().toISOString() });
+    } else {
+      throw new Error("この予定はまだ削除できません（PC側の同期が新しくなるまでお待ちください）");
+    }
+    rebuildKeepingScroll();
+    if (schedSelectedDate) selectSchedDate(schedSelectedDate, true);
+  }
+
+  // 時間グリッド上の予定：クリック＝編集ダイアログ、ドラッグ＝移動（15分刻み、
+  // 週表示なら日をまたいで横にも動かせる）、下端のつまみ＝終了時刻の変更。
+  // スマホは誤操作防止のため「長押ししてから」ドラッグ（それまでは通常のスクロール）。
+  function attachEventInteractions(el, seg, dayCount){
+    const src = seg.src || seg;
+    const resizable = !!src.start_time && !!src.end_time && (!src.end_date || src.end_date === src.date)
+      && toMinutes(src.end_time) > toMinutes(src.start_time);
+    if (resizable){ const h = document.createElement("div"); h.className = "tg-resize"; el.appendChild(h); }
+
+    let mode = null, startX = 0, startY = 0, moved = false, dSnap = 0, dDays = 0, span = null;
+    const colWidth = () => el.parentElement.getBoundingClientRect().width;
+
+    function begin(kind, x, y){ mode = kind; startX = x; startY = y; moved = false; dSnap = 0; dDays = 0; span = eventSpan(src); }
+    function move(x, y){
+      const dx = x - startX, dy = y - startY;
+      if (!moved){ if (Math.hypot(dx, dy) < 5) return; moved = true; el.classList.add("dragging"); }
+      dSnap = Math.round((dy * 60 / TG_ROW_PX) / DRAG_SNAP_MIN) * DRAG_SNAP_MIN;
+      if (mode === "move"){
+        dDays = dayCount === 7 ? Math.round(dx / colWidth()) : 0;
+        el.style.transform = `translate(${dDays * colWidth()}px, ${(dSnap / 60) * TG_ROW_PX}px)`;
+        el.firstChild.nodeValue = `${fmtHM(span.s + dSnap)}–${fmtHM(span.e + dSnap)} ${src.title}`;
+      } else {
+        const e2 = Math.max(span.e + dSnap, span.s + DRAG_SNAP_MIN);
+        el.style.height = `${((e2 - span.s) / 60) * TG_ROW_PX}px`;
+        el.firstChild.nodeValue = `${fmtHM(span.s)}–${fmtHM(e2)} ${src.title}`;
+      }
+    }
+    async function finish(){
+      el.classList.remove("dragging");
+      const kind = mode; mode = null;
+      if (!moved){ openEventEditor(seg); return; }   // 動かしていない＝ただのクリック
+      let s2 = span.s, e2 = span.e;
+      if (kind === "move"){ const delta = dDays * 1440 + dSnap; s2 += delta; e2 += delta; }
+      else { e2 = Math.max(span.e + dSnap, span.s + DRAG_SNAP_MIN); }
+      if (s2 === span.s && e2 === span.e){ rebuildKeepingScroll(); return; }
+      try{
+        await saveEvent(src, { title: src.title, ...spanToValues(src, s2, e2) });
+        schedToast(`${fmtHM(s2)}–${fmtHM(e2)} に変更しました（Googleカレンダーへは次回同期で反映）`);
+      }catch(err){
+        schedToast("変更に失敗しました: " + err.message);
+        rebuildKeepingScroll();
+      }
+    }
+
+    el.addEventListener("click", (e) => e.stopPropagation());
+    // マウス：ボタンを押した瞬間からドラッグ判定（5px動くまではクリック扱い）
+    el.addEventListener("mousedown", (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault(); e.stopPropagation();
+      begin(e.target.classList.contains("tg-resize") ? "resize" : "move", e.clientX, e.clientY);
+      const onMove = (ev) => move(ev.clientX, ev.clientY);
+      const onUp = () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); finish(); };
+      window.addEventListener("mousemove", onMove);
+      window.addEventListener("mouseup", onUp);
+    });
+    // タッチ：350ms長押しでドラッグ開始。それより短いタップは編集を開く。
+    let pressTimer = null, dragging = false, scrolled = false;
+    el.addEventListener("touchstart", (e) => {
+      if (e.touches.length !== 1) return;
+      e.stopPropagation();
+      const t = e.touches[0], kind = e.target.classList.contains("tg-resize") ? "resize" : "move";
+      dragging = false; scrolled = false;
+      clearTimeout(pressTimer);
+      pressTimer = setTimeout(() => {
+        dragging = true; begin(kind, t.clientX, t.clientY);
+        el.classList.add("dragging");
+        if (navigator.vibrate) navigator.vibrate(15);
+      }, 350);
+    }, { passive: true });
+    el.addEventListener("touchmove", (e) => {
+      const t = e.touches[0];
+      if (!dragging){ scrolled = true; clearTimeout(pressTimer); return; }
+      e.preventDefault();
+      move(t.clientX, t.clientY);
+    }, { passive: false });
+    el.addEventListener("touchend", (e) => {
+      clearTimeout(pressTimer);
+      if (dragging){ dragging = false; e.preventDefault(); finish(); return; }
+      if (!scrolled){ e.preventDefault(); openEventEditor(seg); }   // preventDefaultで後続の疑似マウスイベントを抑止
+    });
+    el.addEventListener("touchcancel", () => { clearTimeout(pressTimer); if (dragging){ dragging = false; mode = null; el.classList.remove("dragging"); rebuildKeepingScroll(); } });
+  }
+
+  // ---- 編集ダイアログ ----
+  const evModal = document.getElementById("ev-modal");
+  const evForm = document.getElementById("ev-form");
+  const evTitle = document.getElementById("ev-title"), evDate = document.getElementById("ev-date");
+  const evAllday = document.getElementById("ev-allday"), evAlldayField = document.getElementById("ev-allday-field");
+  const evTimeBlock = document.getElementById("ev-time-block");
+  const evStart = document.getElementById("ev-start"), evEnd = document.getElementById("ev-end");
+  const evStartRange = document.getElementById("ev-start-range"), evEndRange = document.getElementById("ev-end-range");
+  const evNote = document.getElementById("ev-note"), evStatus = document.getElementById("ev-status");
+  const evSave = document.getElementById("ev-save"), evDelete = document.getElementById("ev-delete");
+  let evEditing = null;
+
+  function evSyncTimeVisibility(){
+    const isAssign = evEditing && evEditing.family_type === "assignment_due";
+    evTimeBlock.style.display = (!isAssign && !evAllday.checked) ? "block" : "none";
+  }
+  // スライダーは分（0〜1435）。終了だけは 24:00（=1440）まで動かせるよう上限を1440にする。
+  evEndRange.max = "1440";
+  function evEndToRange(hm, startHm){
+    const m = toMinutes(hm);
+    return (m === 0 && startHm && toMinutes(startHm) > 0) ? 1440 : m;   // 「00:00」は日付が変わる終了（24:00）として扱う
+  }
+  evStartRange.addEventListener("input", () => { evStart.value = fmtHM(+evStartRange.value); });
+  evEndRange.addEventListener("input", () => { evEnd.value = fmtHM(+evEndRange.value); });
+  evStart.addEventListener("input", () => { if (evStart.value) evStartRange.value = toMinutes(evStart.value); });
+  evEnd.addEventListener("input", () => { if (evEnd.value) evEndRange.value = evEndToRange(evEnd.value, evStart.value); });
+  evAllday.addEventListener("change", evSyncTimeVisibility);
+
+  function openEventEditor(seg){
+    const src = seg.src || seg;
+    evEditing = src;
+    const ft = src.family_type;
+    const isShift = ft === "shift", isAssign = ft === "assignment_due", isClass = ft === "class";
+    const editable = !!(src.id || src.pending_id);
+    const hasTime = !!src.start_time;
+
+    document.getElementById("ev-modal-title").textContent = `${FAMILY_LABEL[ft] || "予定"}を編集`;
+    evTitle.value = src.title || ""; evTitle.disabled = isShift;   // バイトの題名は時刻・見込み額から自動生成される
+    evDate.value = src.date;
+    evAllday.checked = !hasTime;
+    evAlldayField.style.display = (isShift || isAssign || isClass) ? "none" : "block";   // 終日⇔時刻指定を切り替えられるのは私用・健康のみ
+    const st = hasTime ? src.start_time : "09:00";
+    const en = hasTime ? (src.end_time || fmtHM(toMinutes(st) + 60)) : "10:00";
+    evStart.value = st; evEnd.value = en;
+    evStartRange.value = toMinutes(st); evEndRange.value = evEndToRange(en, st);
+    evSyncTimeVisibility();
+
+    let note = "";
+    if (!editable) note = "この予定はまだ編集できません（PC側の同期が新しくなるまでお待ちください）。";
+    else if (src.pending_id && !src.id) note = "同期待ちの予定です。保存するとすぐ反映されます。";
+    else note = "変更はPC側の次回同期でGoogleカレンダーに反映されます（それまで破線で表示）。";
+    if (isShift) note += " 時刻を変えると給与見込みが自動で再計算されます。";
+    if (isClass || isAssign) note += " 授業・締切は元のデータ（学内ポータル等）の同期で元に戻ることがあります。";
+    if (!isAssign) note += " 終了が開始より前の時刻は翌日の終了として扱います。";
+    evNote.textContent = note;
+    evStatus.textContent = "";
+    evSave.disabled = !editable; evDelete.disabled = !editable;
+    evModal.style.display = "flex";
+  }
+  function closeEventEditor(){ evModal.style.display = "none"; evEditing = null; }
+  document.getElementById("ev-cancel").addEventListener("click", closeEventEditor);
+  evModal.addEventListener("click", (e) => { if (e.target === evModal) closeEventEditor(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && evModal.style.display !== "none") closeEventEditor(); });
+
+  evForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const src = evEditing;
+    if (!src) return;
+    const ft = src.family_type;
+    const title = ft === "shift" ? src.title : evTitle.value.trim();
+    const date = evDate.value;
+    let vals;
+    if (ft === "assignment_due" || evAllday.checked){
+      // 終日の複数日予定は元の日数を保ったまま日付だけ動かす
+      let end_date = null;
+      if (!src.start_time && src.end_date && src.end_date > src.date){
+        end_date = ymd(addDays(parseYmd(date), Math.round((parseYmd(src.end_date) - parseYmd(src.date)) / 86400000)));
+      }
+      vals = { title, date, end_date, start_time: null, end_time: null };
+    } else {
+      const st = evStart.value, en = evEnd.value;
+      if (!st || !en){ evStatus.textContent = "開始と終了の時刻を入力してください"; return; }
+      if (st === en){ evStatus.textContent = "開始と終了が同じ時刻です"; return; }
+      const origSpan = src.start_time && src.end_date ? Math.round((parseYmd(src.end_date) - parseYmd(src.date)) / 86400000) : 0;
+      const daysAdd = origSpan >= 2 ? origSpan : (en <= st ? 1 : 0);   // 2日以上にまたがる予定は日数を保つ
+      vals = { title, date, end_date: ymd(addDays(parseYmd(date), daysAdd)), start_time: st, end_time: en };
+    }
+    evSave.disabled = true;
+    try{
+      await saveEvent(src, vals);
+      closeEventEditor();
+      schedToast("保存しました");
+    }catch(err){
+      evStatus.textContent = "保存に失敗しました: " + err.message;
+    }finally{
+      evSave.disabled = !(src.id || src.pending_id);
+    }
+  });
+
+  evDelete.addEventListener("click", async () => {
+    const src = evEditing;
+    if (!src) return;
+    if (!confirm(`「${src.title}」を削除しますか？`)) return;
+    evDelete.disabled = true;
+    try{
+      await deleteEvent(src);
+      closeEventEditor();
+      schedToast("削除しました（Googleカレンダーへは次回同期で反映）");
+    }catch(err){
+      evStatus.textContent = "削除に失敗しました: " + err.message;
+      evDelete.disabled = false;
+    }
   });
 
   // ---- レシートOCR ----
