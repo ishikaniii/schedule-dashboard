@@ -523,6 +523,16 @@
           <input type="text" id="sa-title" required>
         </div>
         <div class="field">
+          <label for="sa-category">カテゴリ</label>
+          <select id="sa-category">
+            <option value="personal">私用</option>
+            <option value="shift">バイト</option>
+            <option value="class">授業</option>
+            <option value="assignment_due">締切</option>
+            <option value="health">健康（筋トレ・有酸素）</option>
+          </select>
+        </div>
+        <div class="field">
           <label for="sa-date">日付</label>
           <input type="date" id="sa-date" required>
         </div>
@@ -1067,7 +1077,7 @@
     try{
       const { data: pendingRows } = await sb.from("pending_personal_plans").select("*").eq("status","confirmed");
       pending = (pendingRows || []).map(p => ({
-        pending_id: p.id, date: p.date, title: p.title, family_type: "personal",
+        pending_id: p.id, date: p.date, title: p.title, family_type: p.family_type || "personal",
         start_time: p.start_time, end_time: p.end_time, amount: null, pending: true,
       }));
     }catch(e){ /* テーブル未作成などは無視（確定分だけ表示する） */ }
@@ -1333,6 +1343,7 @@
     saCard.style.display = "block";
     document.getElementById("sa-date").value = dateStr || ymd(new Date());
     document.getElementById("sa-title").value = "";
+    document.getElementById("sa-category").value = "personal";
     document.getElementById("sa-note").value = "";
     document.getElementById("sa-status").textContent = "";
     if (typeof startMin === "number"){   // 時間グリッドの空きをダブルクリックしたとき（開始時刻つき）
@@ -1355,10 +1366,18 @@
       end_time: isAllday ? null : (document.getElementById("sa-end").value || null),
       title: document.getElementById("sa-title").value.trim(),
       note: document.getElementById("sa-note").value.trim(),
+      family_type: document.getElementById("sa-category").value,
       status: "confirmed",
       confirmed_at: new Date().toISOString(),
     };
-    const { data: inserted, error } = await sb.from("pending_personal_plans").insert(row).select();
+    let { data: inserted, error } = await sb.from("pending_personal_plans").insert(row).select();
+    if (error && /family_type/.test(error.message || "")){
+      // schema.sql の family_type 列がまだ無い場合：カテゴリ抜き（私用）で追加する
+      const { family_type, ...rest } = row;
+      ({ data: inserted, error } = await sb.from("pending_personal_plans").insert(rest).select());
+      if (!error && family_type !== "personal") schedToast("カテゴリ列が未作成のため「私用」で追加しました（schema.sqlのfamily_type追加が必要）");
+      row.family_type = "personal";
+    }
     if (error){
       document.getElementById("sa-status").textContent = "追加に失敗しました: " + error.message;
     } else {
@@ -1366,7 +1385,7 @@
       // 追加した直後からクリック編集・ドラッグ移動・削除ができる。
       schedRawEvents.push({
         pending_id: inserted && inserted[0] ? inserted[0].id : undefined,
-        date: row.date, title: row.title, family_type: "personal",
+        date: row.date, title: row.title, family_type: row.family_type || "personal",
         start_time: row.start_time, end_time: row.end_time, amount: null, pending: true,
       });
       rebuildSchedIndex();
