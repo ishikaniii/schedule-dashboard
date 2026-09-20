@@ -182,6 +182,18 @@
   .body-wrap{ width:100%; min-height:200px; display:flex; justify-content:center; }
   .body-wrap canvas{ display:block; cursor:grab; }
   .body-wrap canvas:active{ cursor:grabbing; }
+  .pend-split{ flex:1 0 100%; margin-top:6px; }
+  .sp-line{ display:flex; gap:6px; margin-bottom:6px; align-items:center; flex-wrap:wrap; }
+  .sp-line .sp-amt{ width:6.5em; }
+  .sp-line .sp-memo{ flex:1 1 120px; min-width:0; }
+  .sp-del{ border:none; background:var(--surface-2); color:var(--ink-dim); border-radius:6px; width:28px; height:28px; cursor:pointer; }
+  .sp-foot{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .sp-foot button{ border:1px solid var(--border); background:var(--surface-2); color:var(--ink); border-radius:6px; padding:5px 10px; font-size:12px; cursor:pointer; }
+  .sp-foot .sp-confirm{ margin-left:auto; }
+  .sp-foot .sp-confirm:disabled{ opacity:.45; cursor:not-allowed; }
+  .sp-rest{ font-size:12px; font-family:"IBM Plex Mono",monospace; }
+  .sp-rest.ok{ color:var(--shift); } .sp-rest.ng{ color:var(--strength); }
+  .split-btn{ border:1px solid var(--border); background:var(--surface-2); color:var(--ink); border-radius:6px; padding:5px 10px; font-size:12px; cursor:pointer; }
   .pend-row{ flex-wrap:wrap; }
   .pend-edit{ flex:1 0 100%; display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
   .pend-edit .pend-memo{ flex:1 1 180px; min-width:0; }
@@ -962,18 +974,92 @@
     if (!data.length){ listEl.innerHTML = '<li class="empty">未確認の支出はありません。</li>'; return; }
     // 記録の前に「内訳（メモ）」とカテゴリを書き込める。記録すると、その内容が
     // そのまま家計簿（Google Sheets）のメモ・カテゴリ列に入る。
+    // 「分割」を押すと1件の支払いを複数の行（金額・カテゴリ・内訳）に分けて
+    // 別々に記録できる（合計が元の金額と一致するまで記録できない）。
     const catOpts = [...document.querySelectorAll("#r-category option")].map(o => o.value);
+    const catSelect = (sel) => `<select class="pend-cat">${catOpts.map(c => `<option value="${escapeHtml(c)}"${c === sel ? " selected" : ""}>${escapeHtml(c)}</option>`).join("")}</select>`;
     listEl.innerHTML = data.map(p => `
       <li class="row pend-row" data-id="${p.id}">
         <span class="desc">${escapeHtml(p.origin)}</span>
         <span class="amt mono">${fmtYen(p.amount)}</span>
-        <div class="pend-edit">
+        <div class="pend-edit pend-single">
           <input type="text" class="pend-memo" value="${escapeHtml(p.memo || "")}" placeholder="内訳（例：昼食＋飲み物）" maxlength="200">
-          <select class="pend-cat">${catOpts.map(c => `<option value="${escapeHtml(c)}"${c === p.category ? " selected" : ""}>${escapeHtml(c)}</option>`).join("")}</select>
+          ${catSelect(p.category)}
+          <button class="split-btn" type="button">分割</button>
           <button class="confirm-btn" data-id="${p.id}">記録する</button>
         </div>
+        <div class="pend-split" style="display:none;"></div>
       </li>`).join("");
-    listEl.querySelectorAll(".confirm-btn").forEach(btn => btn.addEventListener("click", async () => {
+
+    const byId = Object.fromEntries(data.map(p => [p.id, p]));
+    listEl.querySelectorAll(".pend-row").forEach(rowEl => {
+      const p = byId[rowEl.dataset.id];
+      const single = rowEl.querySelector(".pend-single"), splitEl = rowEl.querySelector(".pend-split");
+
+      const lineHtml = (amt, cat, memo) => `
+        <div class="sp-line">
+          <input type="number" class="sp-amt" min="1" step="1" inputmode="numeric" value="${amt || ""}" placeholder="金額">
+          ${catSelect(cat)}
+          <input type="text" class="pend-memo sp-memo" value="${escapeHtml(memo || "")}" placeholder="内訳" maxlength="200">
+          <button type="button" class="sp-del" aria-label="この行を削除">×</button>
+        </div>`;
+      const sumLines = () => [...splitEl.querySelectorAll(".sp-amt")].reduce((t, i) => t + (parseInt(i.value, 10) || 0), 0);
+      const refresh = () => {
+        const rest = p.amount - sumLines();
+        const info = splitEl.querySelector(".sp-rest");
+        info.textContent = rest === 0 ? "合計OK" : (rest > 0 ? `残り ${fmtYen(rest)}` : `${fmtYen(-rest)} 超過`);
+        info.className = "sp-rest" + (rest === 0 ? " ok" : " ng");
+        splitEl.querySelector(".sp-confirm").disabled = rest !== 0 || [...splitEl.querySelectorAll(".sp-amt")].some(i => !(parseInt(i.value, 10) > 0));
+      };
+      const wire = () => {
+        splitEl.querySelectorAll(".sp-amt").forEach(i => i.oninput = refresh);
+        splitEl.querySelectorAll(".sp-del").forEach(btn => btn.onclick = () => {
+          if (splitEl.querySelectorAll(".sp-line").length <= 2) return;   // 分割は最低2行
+          btn.closest(".sp-line").remove(); refresh();
+        });
+      };
+      const openSplit = () => {
+        splitEl.innerHTML = `<div class="sp-lines">${lineHtml(p.amount, p.category, p.memo)}${lineHtml("", p.category, "")}</div>
+          <div class="sp-foot">
+            <button type="button" class="sp-add">行を追加</button>
+            <span class="sp-rest"></span>
+            <button type="button" class="sp-cancel">分割をやめる</button>
+            <button type="button" class="sp-confirm confirm-btn">分けて記録する</button>
+          </div>`;
+        single.style.display = "none"; splitEl.style.display = "block";
+        wire(); refresh();
+        splitEl.querySelector(".sp-add").onclick = () => {
+          splitEl.querySelector(".sp-lines").insertAdjacentHTML("beforeend", lineHtml("", p.category, ""));
+          wire(); refresh();
+        };
+        splitEl.querySelector(".sp-cancel").onclick = () => { splitEl.style.display = "none"; single.style.display = "flex"; };
+        splitEl.querySelector(".sp-confirm").onclick = async (ev) => {
+          const btn = ev.currentTarget; btn.disabled = true; btn.textContent = "...";
+          const lines = [...splitEl.querySelectorAll(".sp-line")].map(l => ({
+            amount: parseInt(l.querySelector(".sp-amt").value, 10),
+            category: l.querySelector(".pend-cat").value,
+            memo: l.querySelector(".sp-memo").value.trim(),
+          }));
+          const now = new Date().toISOString();
+          // 1行目は元の行を更新（カード利用の紐付けを保つ）、2行目以降は新しい確定済みの行として追加
+          const first = lines[0];
+          const { error: e1 } = await sb.from("pending_expenses").update({
+            status: "confirmed", confirmed_at: now, amount: first.amount, category: first.category, memo: first.memo,
+          }).eq("id", p.id);
+          if (e1){ showBanner("確定に失敗しました: " + e1.message); btn.disabled = false; btn.textContent = "分けて記録する"; return; }
+          const extras = lines.slice(1).map(l => ({
+            origin: "receipt_scan", amount: l.amount, category: l.category,
+            memo: l.memo || ("分割（" + p.origin + "）"), status: "confirmed", confirmed_at: now, created_at: p.created_at,
+          }));
+          const { error: e2 } = await sb.from("pending_expenses").insert(extras);
+          if (e2) showBanner("1行目は記録しましたが、2行目以降の追加に失敗しました。レシート記録から手動で追加してください: " + e2.message);
+          loadPending();
+        };
+      };
+      rowEl.querySelector(".split-btn").addEventListener("click", openSplit);
+    });
+
+    listEl.querySelectorAll(".pend-single .confirm-btn").forEach(btn => btn.addEventListener("click", async () => {
       btn.disabled = true; btn.textContent = "...";
       const rowEl = btn.closest(".pend-row");
       const upd = { status: "confirmed", confirmed_at: new Date().toISOString(),
