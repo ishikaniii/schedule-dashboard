@@ -580,6 +580,10 @@
               <option value="health">健康（筋トレ・有酸素）</option>
             </select>
           </div>
+          <div class="field" id="ev-note-field">
+            <label for="ev-notetext">メモ</label>
+            <textarea id="ev-notetext" rows="3" placeholder="持ち物・場所・URLなど"></textarea>
+          </div>
           <div class="field">
             <label for="ev-date">日付</label>
             <input type="date" id="ev-date" required>
@@ -1087,7 +1091,7 @@
     try{
       const { data: pendingRows } = await sb.from("pending_personal_plans").select("*").eq("status","confirmed");
       pending = (pendingRows || []).map(p => ({
-        pending_id: p.id, date: p.date, title: p.title, family_type: p.family_type || "personal",
+        pending_id: p.id, date: p.date, title: p.title, note: p.note || "", family_type: p.family_type || "personal",
         start_time: p.start_time, end_time: p.end_time, amount: null, pending: true,
       }));
     }catch(e){ /* テーブル未作成などは無視（確定分だけ表示する） */ }
@@ -1121,7 +1125,8 @@
           date: ed.date || ev0.date, end_date: ed.end_date || null,
           start_time: ed.start_time || null, end_time: ed.end_time || null,
           title: ed.title || ev0.title,
-          family_type: ed.new_family_type || ev0.family_type };
+          family_type: ed.new_family_type || ev0.family_type,
+          note: ed.note != null ? ed.note : ev0.note };
       }
       expandAcrossDays(ev).forEach(seg => { (schedEventsByDate[seg.date] ||= []).push(seg); });
     });
@@ -1332,7 +1337,8 @@
       const time = ev.start_time ? `${ev.start_time}${ev.end_time ? "–"+ev.end_time : ""} / ` : "";
       const amount = ev.amount ? `（${fmtYen(ev.amount)}）` : "";
       const pendingMark = ev.pending ? `<span class="note" style="display:inline;">（${ev.edited ? "変更を同期待ち" : "同期待ち"}）</span>` : "";
-      d.innerHTML = `<span class="note" style="display:inline;">${FAMILY_LABEL[ev.family_type] || ""}</span> ${time}${escapeHtml(ev.title)}${amount}${pendingMark}`;
+      const memo = ev.note ? `<div class="note" style="white-space:pre-wrap;">${escapeHtml(ev.note.length > 160 ? ev.note.slice(0,160) + "…" : ev.note)}</div>` : "";
+      d.innerHTML = `<span class="note" style="display:inline;">${FAMILY_LABEL[ev.family_type] || ""}</span> ${time}${escapeHtml(ev.title)}${amount}${pendingMark}${memo}`;
       d.addEventListener("click", () => openEventEditor(ev));   // クリックで編集
       wrap.appendChild(d);
     });
@@ -1396,7 +1402,7 @@
       // 追加した直後からクリック編集・ドラッグ移動・削除ができる。
       schedRawEvents.push({
         pending_id: inserted && inserted[0] ? inserted[0].id : undefined,
-        date: row.date, title: row.title, family_type: row.family_type || "personal",
+        date: row.date, title: row.title, note: row.note || "", family_type: row.family_type || "personal",
         start_time: row.start_time, end_time: row.end_time, amount: null, pending: true,
       });
       rebuildSchedIndex();
@@ -1451,6 +1457,7 @@
     if (src.pending_id && !src.id){
       const upd = { date: vals.date, start_time: vals.start_time, end_time: vals.end_time, title: vals.title };
       if (vals.new_family_type) upd.family_type = vals.new_family_type;
+      if (vals.note !== undefined) upd.note = vals.note;
       let { data, error } = await sb.from("pending_personal_plans").update(upd)
         .eq("id", src.pending_id).eq("status", "confirmed").select();
       if (error && /family_type/.test(error.message || "")) throw new Error("カテゴリの変更には、Supabaseで schema.sql の family_type 追加SQLの実行が必要です");
@@ -1459,11 +1466,14 @@
       Object.assign(src, { date: vals.date, title: vals.title, start_time: vals.start_time,
                            end_time: vals.end_time, end_date: vals.end_date });
       if (vals.new_family_type) src.family_type = vals.new_family_type;
+      if (vals.note !== undefined) src.note = vals.note;
     } else if (src.id){
       const row = { event_id: src.id, family_type: src.family_type, op: "update", status: "confirmed",
         date: vals.date, end_date: vals.end_date, start_time: vals.start_time, end_time: vals.end_time, title: vals.title };
       if (vals.new_family_type) row.new_family_type = vals.new_family_type;
+      if (vals.note !== undefined) row.note = vals.note;
       const { error } = await sb.from("pending_event_edits").insert(row);
+      if (error && /note/.test(error.message || "")) throw new Error("メモの編集には、Supabaseで schema.sql の note 追加SQLの実行が必要です");
       if (error && /new_family_type/.test(error.message || "")) throw new Error("カテゴリの変更には、Supabaseで schema.sql の new_family_type 追加SQLの実行が必要です");
       if (error) throw new Error(error.message);
       schedEdits.push({ ...row, created_at: new Date().toISOString() });
@@ -1580,6 +1590,7 @@
   const evModal = document.getElementById("ev-modal");
   const evForm = document.getElementById("ev-form");
   const evCategory = document.getElementById("ev-category");
+  const evNoteText = document.getElementById("ev-notetext"), evNoteField = document.getElementById("ev-note-field");
   const evTitle = document.getElementById("ev-title"), evDate = document.getElementById("ev-date");
   const evAllday = document.getElementById("ev-allday"), evAlldayField = document.getElementById("ev-allday-field");
   const evTimeBlock = document.getElementById("ev-time-block");
@@ -1615,6 +1626,8 @@
 
     document.getElementById("ev-modal-title").textContent = `${FAMILY_LABEL[ft] || "予定"}を編集`;
     evCategory.value = ft || "personal";
+    evNoteText.value = src.note || "";
+    evNoteField.style.display = isShift ? "none" : "block";   // バイトの説明欄は給与内訳の自動生成データ
     evTitle.value = src.title || ""; evTitle.disabled = isShift;   // バイトの題名は時刻・見込み額から自動生成される
     evDate.value = src.date;
     evAllday.checked = !hasTime;
@@ -1667,6 +1680,7 @@
       vals = { title, date, end_date: ymd(addDays(parseYmd(date), daysAdd)), start_time: st, end_time: en };
     }
     if (ft !== src.family_type) vals.new_family_type = ft;
+    if (src.family_type !== "shift" && ft !== "shift") vals.note = evNoteText.value.trim();
     evSave.disabled = true;
     try{
       await saveEvent(src, vals);
