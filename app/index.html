@@ -204,6 +204,19 @@
   .pend-edit .pend-memo{ flex:1 1 180px; min-width:0; }
   .sync-now-btn{ border:1px solid var(--border); background:var(--surface); color:var(--ink); border-radius:999px; padding:7px 14px; font-size:12.5px; cursor:pointer; }
   .sync-now-btn:disabled{ opacity:.6; cursor:default; }
+  .reco{ border:1px solid var(--border); background:var(--surface-2); border-radius:10px; padding:10px 12px; margin:4px 0 14px; font-size:13px; }
+  .reco .reco-title{ font-weight:600; margin-bottom:4px; }
+  .reco .reco-why{ color:var(--ink-dim); font-size:12px; margin-bottom:8px; line-height:1.5; }
+  .reco .reco-chips{ display:flex; flex-wrap:wrap; gap:6px; }
+  .reco .reco-chip{ border:1px solid var(--strength); background:var(--strength-soft); color:var(--strength); border-radius:999px; padding:5px 12px; font-size:13px; cursor:pointer; }
+  .reco .reco-alt{ margin-top:8px; font-size:12px; color:var(--ink-dim); }
+  .reco .reco-alt button{ border:1px solid var(--border); background:var(--surface); color:var(--ink-dim); border-radius:6px; padding:2px 8px; font-size:12px; cursor:pointer; margin-left:4px; }
+  .form-guide{ border:1px solid var(--border); border-radius:10px; padding:8px 12px; margin:0 0 12px; font-size:13px; line-height:1.6; }
+  .form-guide summary{ cursor:pointer; font-weight:600; }
+  .form-guide dl{ margin:8px 0 0; } .form-guide dt{ font-size:11.5px; color:var(--strength); font-weight:600; margin-top:8px; letter-spacing:.03em; }
+  .form-guide dd{ margin:2px 0 0; }
+  .form-guide .fg-common{ margin-top:10px; padding-top:8px; border-top:1px dashed var(--border); color:var(--ink-dim); font-size:12px; }
+  .form-guide .fg-common ul{ margin:4px 0 0; padding-left:18px; }
   .credit{ font-size:10.5px; color:var(--ink-dim); line-height:1.5; margin:18px 4px 4px; }
   .credit a{ color:var(--ink-dim); }
   .body-hint{ font-size:10.5px; color:var(--ink-dim); text-align:center; line-height:1.3; }
@@ -357,6 +370,7 @@
      素のTHREEだけで完結する（回転は自前のドラッグ処理で実装）。 -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="body3d.js"></script>
+<script src="form_guide.js"></script>
 </head>
 <body>
 
@@ -673,6 +687,7 @@
     <div class="grid-2">
       <div class="card">
         <h2><span class="dot strength"></span>筋トレを記録</h2>
+        <div class="reco" id="reco-box"></div>
         <form id="form-strength">
           <div class="field"><label for="s-date">日付</label><input type="date" id="s-date" required></div>
           <div class="field">
@@ -697,6 +712,10 @@
             <datalist id="exercise-list"></datalist>
           </div>
           <div class="last-hint" id="s-last-hint"></div>
+          <details class="form-guide" id="form-guide" style="display:none;" open>
+            <summary>正しいフォームのコツ</summary>
+            <div id="form-guide-body"></div>
+          </details>
           <div class="row3">
             <div class="field"><label for="s-weight">重量(kg)</label><input type="number" id="s-weight" step="0.5" min="0" required></div>
             <div class="field"><label for="s-reps">回数</label><input type="number" id="s-reps" step="1" min="1" required></div>
@@ -2487,9 +2506,86 @@
   });
   document.getElementById("s-exercise").addEventListener("change", onExerciseChanged);
 
+  // ---- フォームのコツ（form_guide.js） ----
+  function renderFormGuide(name){
+    const box = document.getElementById("form-guide"), body = document.getElementById("form-guide-body");
+    const g = window.FORM_GUIDE && window.FORM_GUIDE[name];
+    if (!g){ box.style.display = "none"; return; }
+    body.innerHTML = `<dl>
+      <dt>準備</dt><dd>${escapeHtml(g.setup)}</dd>
+      <dt>動作</dt><dd>${escapeHtml(g.move)}</dd>
+      <dt>よくあるミス</dt><dd>${escapeHtml(g.avoid)}</dd>
+      <dt>ポイント・呼吸</dt><dd>${escapeHtml(g.tip)}</dd>
+    </dl>
+    <div class="fg-common">共通の基本
+      <ul>${(window.FORM_COMMON || []).map(t => `<li>${escapeHtml(t)}</li>`).join("")}</ul>
+    </div>`;
+    box.style.display = "block";
+  }
+
+  // ---- 今日のおすすめメニュー ----
+  // 考え方：①直近7日のセット数が一番少ない部位を優先（偏りをならす）、
+  // ②昨日・今日に鍛えた部位は回復のため避ける（同じ部位は48時間あけるのが目安）、
+  // ③その部位の代表的な種目（カタログの先頭＝基本の多関節種目）から3つ。
+  // 記録が無いうちは、全身の基本種目（スクワット・ベンチプレス・ラットプルダウン）を勧める。
+  function renderReco(){
+    const box = document.getElementById("reco-box");
+    if (!box) return;
+    const today = new Date(), fmt = (d) => ymd(d);
+    const d7 = fmt(addDays(today, -7)), d1 = fmt(addDays(today, -1));
+    const sets = Object.fromEntries(PARTS.map(p => [p, 0]));
+    const recent = new Set();
+    strengthLogs.forEach(l => {
+      const ex = exerciseByName[l.exercise]; if (!ex) return;
+      if (l.date >= d7) sets[ex.part] += (l.sets || 1);
+      if (l.date >= d1) recent.add(ex.part);
+    });
+    const anyLog = strengthLogs.some(l => l.date >= d7);
+    let title, why, exs, alts = [];
+    if (!strengthLogs.length){
+      title = "はじめの一歩：全身の基本3種目";
+      why = "記録がまだ無いので、全身をバランスよく使う定番の3種目から。まずは軽い重量でフォームを確認しましょう。";
+      exs = ["スクワット", "ベンチプレス", "ラットプルダウン"];
+    } else {
+      const order = PARTS.slice().sort((a, b) => sets[a] - sets[b]);
+      const avail = order.filter(p => !recent.has(p));
+      if (!avail.length){
+        title = "今日は回復日がおすすめ";
+        why = "全部位を昨日〜今日に鍛えています。軽い有酸素運動（ウォーキング・ジョグ）やストレッチで回復を優先しましょう。";
+        exs = [];
+      } else {
+        const p = avail[0];
+        title = `おすすめ：${p}`;
+        why = `直近7日の${p}は${sets[p]}セット` + (anyLog ? "（6部位の中で" + (sets[p] === order[0] ? "最少" : "少なめ") + "）" : "") +
+              (recent.size ? `。${[...recent].join("・")}は昨日・今日に鍛えたので避けています` : "") + "。";
+        exs = EXERCISES.filter(e => e.part === p).slice(0, 3).map(e => e.n);
+        alts = avail.slice(1, 3);
+      }
+    }
+    const goal = "目安：各種目 3セット × 8〜12回、余力1〜2回（RPE 7〜8）。ウォームアップを先に。";
+    box.innerHTML = `<div class="reco-title">今日のおすすめメニュー</div>
+      <div class="reco-why"><b>${escapeHtml(title)}</b><br>${escapeHtml(why)}</div>
+      ${exs.length ? `<div class="reco-chips">${exs.map(n => `<button type="button" class="reco-chip" data-ex="${escapeHtml(n)}">${escapeHtml(n)}</button>`).join("")}</div>
+      <div class="reco-why" style="margin-top:6px;">${escapeHtml(goal)}</div>` : ""}
+      ${alts.length ? `<div class="reco-alt">他の候補：${alts.map(p => `<button type="button" data-part="${p}">${p}</button>`).join("")}</div>` : ""}`;
+    box.querySelectorAll(".reco-chip").forEach(b => b.addEventListener("click", () => {
+      const ex = exerciseByName[b.dataset.ex];
+      if (ex){ currentPart = ex.part; [...document.getElementById("part-tabs").children].forEach(x => x.classList.toggle("active", x.dataset.part === currentPart)); }
+      document.getElementById("s-exercise").value = b.dataset.ex;
+      onExerciseChanged();
+      document.getElementById("form-guide").scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }));
+    box.querySelectorAll(".reco-alt button").forEach(b => b.addEventListener("click", () => {
+      currentPart = b.dataset.part;
+      [...document.getElementById("part-tabs").children].forEach(x => x.classList.toggle("active", x.dataset.part === currentPart));
+      renderExerciseButtons();
+    }));
+  }
+
   // 前回の重量・回数を出して、ワンタップで入れられるようにする
   function onExerciseChanged(){
     renderExerciseButtons();
+    renderFormGuide(document.getElementById("s-exercise").value.trim());
     if (bodyRange === "selected") renderBody();
     const name = document.getElementById("s-exercise").value.trim();
     const hint = document.getElementById("s-last-hint");
@@ -2506,6 +2602,7 @@
   }
   renderExerciseButtons();
   renderBody();
+  renderReco();
 
   // ---- 今週のトレーニング（予定との突き合わせ）と集計 ----
   function renderAdherenceAndStats(){
@@ -2565,6 +2662,7 @@
   async function refetchCardio(){ const {data} = await sb.from("cardio_logs").select("*").order("date",{ascending:false}).limit(500); cardioLogs = data || []; onTrainDataChanged(); }
 
   function onTrainDataChanged(){
+    renderReco();
     renderRecentTrain();
     populateExerciseSelect();
     renderAdherenceAndStats();
