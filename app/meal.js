@@ -424,18 +424,6 @@
       try { localStorage.setItem(KEYNAME, v); localStorage.removeItem(MODELNAME); } catch (e) { /* 保存不可 */ }
       $("mp-key").value = ""; showKeyState(); $("mp-status").textContent = "キーを保存しました。写真を選んでください。";
     });
-    async function pickModel(key) {
-      let m = ""; try { m = localStorage.getItem(MODELNAME) || ""; } catch (e) { /* なし */ }
-      if (m) return m;
-      const r = await fetch("https://generativelanguage.googleapis.com/v1beta/models?key=" + encodeURIComponent(key) + "&pageSize=200");
-      if (!r.ok) throw new Error("models:" + r.status);
-      const d = await r.json();
-      const names = (d.models || []).filter(x => (x.supportedGenerationMethods || []).includes("generateContent") && /flash/i.test(x.name) && !/lite|preview|exp|thinking|tts|image|live|audio/i.test(x.name)).map(x => x.name.replace(/^models\//, ""));
-      names.sort().reverse();
-      m = names[0] || "gemini-2.0-flash";
-      try { localStorage.setItem(MODELNAME, m); } catch (e) { /* なし */ }
-      return m;
-    }
     async function toJpegBase64(file) {
       const bmp = await (window.createImageBitmap ? createImageBitmap(file, { imageOrientation: "from-image" }) : Promise.reject());
       const scaleF = Math.min(1, 1024 / Math.max(bmp.width, bmp.height));
@@ -469,16 +457,10 @@
       if (!key) { $("mp-settings").open = true; $("mp-status").textContent = "先に、下の設定でAPIキーを保存してください。"; $("mp-file").value = ""; return; }
       $("mp-result").innerHTML = ""; $("mp-status").textContent = "認識しています…（10〜20秒）";
       try {
-        const b64 = await toJpegBase64(file), model = await pickModel(key);
-        const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`, {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ contents: [{ parts: [{ text: PROMPT + ($("mp-hint").value.trim() ? "\n補足情報（量や材料など、写真より優先してください）：" + $("mp-hint").value.trim() : "") + (/手作り|自炊/.test($("mp-hint").value) ? "\n手作りの料理なので、家庭の一般的な調理（油や調味料の量）で推定してください。" : "") }, { inline_data: { mime_type: "image/jpeg", data: b64 } }] }], generationConfig: { temperature: 0.2, responseMimeType: "application/json" } }),
-        });
-        if (r.status === 400 || r.status === 401 || r.status === 403) throw new Error("キーが正しくないか、権限がありません（" + r.status + "）。キーを確認してください。");
-        if (r.status === 429) throw new Error("無料枠の利用上限に達しました。しばらく待ってからやり直してください。");
-        if (r.status === 404) { try { localStorage.removeItem(MODELNAME); } catch (e) { /* なし */ } throw new Error("モデルが見つかりません。もう一度お試しください。"); }
-        if (!r.ok) throw new Error("認識に失敗しました（" + r.status + "）。");
-        const d = await r.json();
+        const b64 = await toJpegBase64(file);
+        const d = await LifeGemini.generate(key, {
+          contents: [{ parts: [{ text: PROMPT + ($("mp-hint").value.trim() ? "\n補足情報（量や材料など、写真より優先してください）：" + $("mp-hint").value.trim() : "") + (/手作り|自炊/.test($("mp-hint").value) ? "\n手作りの料理なので、家庭の一般的な調理（油や調味料の量）で推定してください。" : "") }, { inline_data: { mime_type: "image/jpeg", data: b64 } }] }],
+          generationConfig: { temperature: 0.2, responseMimeType: "application/json" } });
         const text = (((d.candidates || [])[0] || {}).content || {}).parts ? d.candidates[0].content.parts.map(p => p.text || "").join("") : "";
         const arr = JSON.parse(text.replace(/^```(?:json)?/i, "").replace(/```$/, "").trim());
         photoItems = (Array.isArray(arr) ? arr : []).filter(x => x && x.name).map(x => ({ name: String(x.name).slice(0, 60), amount: x.amount || "", kcal: +x.kcal || 0, protein: +x.protein || 0, fat: +x.fat || 0, carb: +x.carb || 0 }));

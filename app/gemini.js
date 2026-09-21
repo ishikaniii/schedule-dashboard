@@ -7,15 +7,28 @@
   const KEY = "lb_gemini_key", MODEL = "lb_gemini_model";
   const ls = { get(k) { try { return localStorage.getItem(k) || ""; } catch (e) { return ""; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* 保存不可 */ } }, del(k) { try { localStorage.removeItem(k); } catch (e) { /* なし */ } } };
 
-  async function pickModel(key) {
-    const cached = ls.get(MODEL); if (cached) return cached;
+  // 使えそうな flash 系モデルを、新しい版から順に返す（gemini-2.5-flash のような数字版のみ。omni・tts・image・
+  // preview・lite は除く）。無料枠が0のモデルがあるので、呼び出し側が順に試し、通ったものを覚える。
+  async function modelList(key) {
     const r = await fetch("https://generativelanguage.googleapis.com/v1beta/models?key=" + encodeURIComponent(key) + "&pageSize=200");
     if (!r.ok) throw new Error(r.status === 400 || r.status === 403 ? "キーが正しくないか、権限がありません（" + r.status + "）" : "モデル一覧を取得できませんでした（" + r.status + "）");
     const d = await r.json();
-    const names = (d.models || []).filter(x => (x.supportedGenerationMethods || []).includes("generateContent") && /flash/i.test(x.name)
-      && !/lite|preview|exp|thinking|tts|image|live|audio/i.test(x.name)).map(x => x.name.replace(/^models\//, ""));
-    names.sort().reverse();
-    const m = names[0] || "gemini-2.0-flash"; ls.set(MODEL, m); return m;
+    const found = [];
+    (d.models || []).forEach(x => { const n = x.name.replace(/^models\//, ""); const m = /^gemini-(\d+(?:\.\d+)?)-flash$/.exec(n); if (m && (x.supportedGenerationMethods || []).includes("generateContent")) found.push([parseFloat(m[1]), n]); });
+    found.sort((a, b) => b[0] - a[0]);
+    const names = found.map(x => x[1]); return names.length ? names : ["gemini-2.5-flash"];
+  }
+  async function generate(key, body) {
+    const cached = ls.get(MODEL); const list = await modelList(key);
+    const order = cached ? [cached, ...list.filter(m => m !== cached)] : list;
+    let last = 0;
+    for (const model of order) {
+      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      if ([429, 404, 400, 403, 503].includes(r.status)) { last = r.status; if (cached && model === cached) ls.del(MODEL); continue; }
+      if (!r.ok) throw new Error("認識に失敗しました（" + r.status + "）");
+      ls.set(MODEL, model); return await r.json();
+    }
+    throw new Error(last === 429 ? "無料枠の利用上限に達しました。しばらく待ってからやり直してください" : "使えるモデルがありませんでした（" + last + "）。キーの権限を確認してください");
   }
 
   async function toJpegBase64(file, maxSide) {
@@ -29,17 +42,9 @@
   // 画像＋指示 → JSON（オブジェクトまたは配列）。失敗時は Error（メッセージは利用者向け）。
   async function askImage(file, prompt, opts) {
     const key = ls.get(KEY); if (!key) throw new Error("APIキーが未設定です");
-    const b64 = await toJpegBase64(file, (opts && opts.maxSide) || 1600), model = await pickModel(key);
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: "image/jpeg", data: b64 } }] }],
-                             generationConfig: { temperature: 0.1, responseMimeType: "application/json" } }),
-    });
-    if (r.status === 400 || r.status === 401 || r.status === 403) throw new Error("キーが正しくないか、権限がありません（" + r.status + "）");
-    if (r.status === 429) throw new Error("無料枠の利用上限に達しました。しばらく待ってからやり直してください");
-    if (r.status === 404) { ls.del(MODEL); throw new Error("モデルが見つかりません。もう一度お試しください"); }
-    if (!r.ok) throw new Error("認識に失敗しました（" + r.status + "）");
-    const d = await r.json();
+    const b64 = await toJpegBase64(file, (opts && opts.maxSide) || 1600);
+    const d = await generate(key, { contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: "image/jpeg", data: b64 } }] }],
+                                    generationConfig: { temperature: 0.1, responseMimeType: "application/json" } });
     const parts = (((d.candidates || [])[0] || {}).content || {}).parts || [];
     const text = parts.map(p => p.text || "").join("").replace(/^\s*```(?:json)?/i, "").replace(/```\s*$/, "").trim();
     try { return JSON.parse(text); } catch (e) { throw new Error("結果を読み取れませんでした"); }
@@ -60,5 +65,5 @@
     };
   }
 
-  global.LifeGemini = { getKey: () => ls.get(KEY), setKey: (v) => { ls.set(KEY, v); ls.del(MODEL); }, hasKey: () => !!ls.get(KEY), askImage, readReceipt };
+  global.LifeGemini = { generate, getKey: () => ls.get(KEY), setKey: (v) => { ls.set(KEY, v); ls.del(MODEL); }, hasKey: () => !!ls.get(KEY), askImage, readReceipt };
 })(window);
