@@ -278,6 +278,17 @@
   .mr-body{ margin-top:8px; font-size:13px; line-height:1.6; } .mr-h{ font-weight:600; font-size:12px; color:#c9772b; margin-top:8px; }
   .mr-body ul, .mr-body ol{ margin:4px 0; padding-left:20px; } .mr-body p{ margin:4px 0; }
   .mp-hint{ flex:1 1 220px; min-width:0; }
+  .dot.habit{ background:#5a7d9a; }
+  .hb-progress{ margin-bottom:10px; } .hb-group{ margin:10px 0 14px; }
+  .hb-gt{ font-weight:600; font-size:13px; display:flex; justify-content:space-between; margin-bottom:4px; } .hb-gt span{ font-weight:400; color:var(--ink-dim); font-size:12px; }
+  .hb-item{ display:flex; gap:10px; align-items:flex-start; padding:7px 0; border-bottom:1px solid var(--border); font-size:13.5px; cursor:pointer; }
+  .hb-item input{ margin-top:3px; width:18px; height:18px; flex:none; } .hb-item small{ display:block; color:var(--ink-dim); font-size:11.5px; }
+  .hb-fields{ display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:8px; margin-bottom:8px; }
+  .hb-fields label, .hb-l{ display:flex; flex-direction:column; gap:4px; font-size:11.5px; color:var(--ink-dim); margin-bottom:8px; }
+  .hb-timer{ text-align:center; } .hb-cue{ font-size:20px; font-weight:600; margin:10px 0 4px; transition:transform 1.2s ease; min-height:1.4em; }
+  .hb-clock{ font-family:"IBM Plex Mono",monospace; font-size:34px; margin-bottom:10px; } .hb-timerbtns{ display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin-bottom:8px; }
+  .hb-timerbtns button{ border:1px solid var(--border); background:var(--surface-2); color:var(--ink); border-radius:8px; padding:8px 12px; font-size:13px; cursor:pointer; } .hb-timerbtns .meal-primary{ border:none; background:#5a7d9a; color:#fff; }
+  .hb-ev p{ font-size:12.5px; line-height:1.65; margin:8px 0; } .hb-ev a{ color:var(--ink-dim); }
   .credit{ font-size:10.5px; color:var(--ink-dim); line-height:1.5; margin:18px 4px 4px; }
   .credit a{ color:var(--ink-dim); }
   .body-hint{ font-size:10.5px; color:var(--ink-dim); text-align:center; line-height:1.3; }
@@ -434,6 +445,7 @@
 <script src="form_guide.js"></script>
 <script src="form_anim.js"></script>
 <script src="meal.js"></script>
+<script src="habits.js"></script>
 <script src="gemini.js"></script>
 </head>
 <body>
@@ -469,6 +481,7 @@
     <button class="nav-btn" data-tab="schedule">スケジュール</button>
     <button class="nav-btn" data-tab="train">トレログ</button>
     <button class="nav-btn" data-tab="meal">食事</button>
+    <button class="nav-btn" data-tab="habit">習慣</button>
     <button class="nav-btn" data-tab="goals">目標</button>
   </nav>
 
@@ -748,6 +761,8 @@
   <!-- ============ 目標 ============ -->
   <section class="panel" id="panel-meal"></section>
 
+  <section class="panel" id="panel-habit"></section>
+
   <section class="panel" id="panel-goals">
     <div class="card" id="goals-card">
       <h2><span class="dot goals"></span>人生の目標<span class="tag" id="goals-updated"></span></h2>
@@ -948,7 +963,7 @@
   // 目標は今後タブが増えても常に一番最後（ユーザー指定、2026-09-19）。
   // 新しいタブを追加するときはこの配列とnav要素の両方で「goals」の手前に
   // 挿入すること。スワイプもこの並び順で前後する。
-  const TAB_ORDER = ["home", "budget", "schedule", "train", "meal", "goals"];
+  const TAB_ORDER = ["home", "budget", "schedule", "train", "meal", "habit", "goals"];
   const tabButtons = document.querySelectorAll(".nav-btn");
   const panels = {
     home: document.getElementById("panel-home"),
@@ -957,6 +972,7 @@
     goals: document.getElementById("panel-goals"),
     train: document.getElementById("panel-train"),
     meal: document.getElementById("panel-meal"),
+    habit: document.getElementById("panel-habit"),
   };
   const loadedTabs = new Set();
 
@@ -1017,6 +1033,12 @@
     return `${Math.floor(mins/60/24)}日前に同期`;
   }
 
+  let habitCtl = null;
+  function loadHabit(){
+    if (!window.LifeHabits){ panels.habit.innerHTML = '<div class="card"><p class="empty">習慣タブを読み込めませんでした。</p></div>'; return; }
+    if (!habitCtl) habitCtl = LifeHabits.mount(panels.habit, { sb, showBanner });
+    else habitCtl.refresh();
+  }
   let mealCtl = null;
   function loadMeal(){
     if (!window.LifeMeal){ panels.meal.innerHTML = '<div class="card"><p class="empty">食事タブを読み込めませんでした。</p></div>'; return; }
@@ -1029,6 +1051,7 @@
     else if (tab === "budget") { loadBudgetTab(); }
     else if (tab === "schedule") { loadSchedule(); }
     else if (tab === "meal") { loadMeal(); }
+    else if (tab === "habit") { loadHabit(); }
     else if (tab === "goals") { loadGoals(); }
     else if (tab === "train") { renderStrengthChart(); renderCardioChart(); if (!trainInited) initTrain(); }
   }
