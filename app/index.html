@@ -220,6 +220,9 @@
   .fg-video{ display:inline-block; margin-top:10px; padding:6px 12px; border:1px solid var(--border); border-radius:999px; font-size:12.5px; color:var(--ink); text-decoration:none; background:var(--surface-2); }
   .fg-fn{ font-size:12px; margin-top:8px; color:var(--ink); } .fg-fn span{ color:var(--ink-dim); }
   .reco .reco-chip .rc-pat{ display:block; font-size:10px; opacity:.75; line-height:1.1; }
+  .reco-tracks{ display:flex; gap:6px; margin:2px 0 8px; flex-wrap:wrap; }
+  .reco-track{ border:1px solid var(--border); background:var(--surface); color:var(--ink-dim); border-radius:999px; padding:5px 12px; font-size:12.5px; cursor:pointer; }
+  .reco-track.active{ background:var(--strength); border-color:var(--strength); color:#fff; }
   .form-guide summary{ cursor:pointer; font-weight:600; }
   .form-guide dl{ margin:8px 0 0; } .form-guide dt{ font-size:11.5px; color:var(--strength); font-weight:600; margin-top:8px; letter-spacing:.03em; }
   .form-guide dd{ margin:2px 0 0; }
@@ -2386,6 +2389,11 @@
     {n:"ステップアップ", part:"脚", p:["quads","glutes"], s:["hamstrings","calves"]},
     {n:"ファーマーズウォーク", part:"体幹", p:["forearms","traps"], s:["abs","obliques","glutes","calves"]},
     {n:"パロフプレス", part:"体幹", p:["obliques","abs"], s:["delts_front","chest"]},
+    // 速筋（爆発系・2026-09-20追加）
+    {n:"ジャンプスクワット", part:"脚", p:["quads","glutes"], s:["calves","hamstrings"]},
+    {n:"ボックスジャンプ", part:"脚", p:["quads","glutes"], s:["calves","hamstrings"]},
+    {n:"クラッププッシュアップ", part:"胸", p:["chest","triceps"], s:["delts_front","abs"]},
+    {n:"メディシンボールスラム", part:"体幹", p:["abs","lats"], s:["delts_front","triceps","glutes"]},
   ];
 
   // ---- 実用度と動作パターン（2026-09-20） ----
@@ -2410,7 +2418,13 @@
     "プランク":["core",3], "サイドプランク":["core",3], "アブローラー":["core",3], "パロフプレス":["core",3],
     "ロシアンツイスト":["core",2], "レッグレイズ":["core",2], "クランチ":["core",1],
     "ファーマーズウォーク":["carry",3], "シュラッグ":["carry",1], "リストカール":["carry",1],
+    "ジャンプスクワット":["squat",3], "ボックスジャンプ":["squat",3], "クラッププッシュアップ":["push",3], "メディシンボールスラム":["core",3],
   };
+  // 速筋（Type II線維）を狙う爆発系：軽〜中程度の負荷を「できるだけ速く」動かす。疲れる前にやめる。
+  const SPEED = new Set(["ジャンプスクワット","ボックスジャンプ","クラッププッシュアップ","メディシンボールスラム","ケトルベルスイング"]);
+  const SPEED_LOWER = ["ジャンプスクワット","ボックスジャンプ","ケトルベルスイング"], SPEED_UPPER = ["クラッププッシュアップ","メディシンボールスラム"];
+  // パワー日の「重い主種目」：動作パターンごとの代表（低回数・高重量＝速筋を動員）
+  const HEAVY_MAIN = { squat: "スクワット", hinge: "デッドリフト", push: "ベンチプレス", pull: "懸垂" };
   const fnOf = (n) => (FN[n] || ["push", 1]);
   const PARTS = ["胸","背中","肩","腕","脚","体幹"];
   const exerciseByName = Object.fromEntries(EXERCISES.map(e => [e.n, e]));
@@ -2558,7 +2572,8 @@
     if (!g){ box.style.display = "none"; return; }
     const [fpat, flv] = fnOf(name);
     const fnLabel = flv >= 3 ? "★★★ 全身を使う基本動作（優先）" : flv === 2 ? "★★☆ 補助的な種目" : "★☆☆ 部分的な強化（優先度は低め）";
-    body.innerHTML = `<div class="fg-fn">実用度：${fnLabel}　<span>動作：${escapeHtml(PATTERN_LABEL[fpat] || "")}</span></div><dl>
+    const speedTag = SPEED.has(name) ? "　⚡速筋（爆発系）" : "";
+    body.innerHTML = `<div class="fg-fn">実用度：${fnLabel}${speedTag}　<span>動作：${escapeHtml(PATTERN_LABEL[fpat] || "")}</span></div><dl>
       <dt>準備</dt><dd>${escapeHtml(g.setup)}</dd>
       <dt>動作</dt><dd>${escapeHtml(g.move)}</dd>
       <dt>よくあるミス</dt><dd>${escapeHtml(g.avoid)}</dd>
@@ -2583,62 +2598,79 @@
   }
   const ANIM_ENABLED = true;
 
-  // ---- 今日のおすすめメニュー（実用重視：動作パターン方式、2026-09-20） ----
-  // 考え方：見た目の部位ではなく「使える動き」で偏りをならす。
-  //   ① 6つの動作パターン（しゃがむ／持ち上げる／押す／引く／体幹／運ぶ）ごとに
-  //      直近7日のセット数を数え、少ないパターンから選ぶ。
-  //   ② 各パターンから、全身を使う多関節の基本種目（実用度★★★）を1つ。
-  //      その中でも「最後にやってから日が空いている種目」を優先（マンネリ防止）。
-  //   ③ 昨日、同じパターンの★★★を行っていたら後回し（回復）。
-  //   ④ 単関節のアイソレーション（カール・レイズ等）は勧めない。
-  // 記録が無いうちは「しゃがむ・引く・押す・体幹」の4つの基本から始める。
+  // ---- 今日のおすすめメニュー（速筋パワー日 / 質量日、2026-09-20） ----
+  // 目的：①速筋（Type II線維）を鍛える＝爆発的に動かす・重いものを速く挙げる、
+  //       ②質量のある筋肉をつける＝ボリューム（回数×セット）と漸進的な負荷増加。
+  //   ・速筋パワー日：爆発系（ジャンプ・スイング・スラム等）＋重い主種目（3〜5回）。
+  //     疲れると速さが落ちるので、ウォームアップの後、最初に行う。セット間は2〜3分。
+  //   ・質量日：多関節の主種目（6〜10回）＋手薄な筋肉への補助種目（10〜15回）。
+  //     追い込み気味（余力0〜2回）で、セット数を確保する。
+  //   どちらを勧めるかは、直近7日の日数が少ない方（同数ならパワー日＝新鮮な状態で）。
+  //   ログの分類：爆発系 or 主種目で5回以下 → パワー、それ以外の6回以上 → 質量。
+  let recoTrack = "auto";
   function renderReco(){
     const box = document.getElementById("reco-box");
     if (!box) return;
     const today = new Date(), fmt = (d) => ymd(d);
-    const d7 = fmt(addDays(today, -7)), d1 = fmt(addDays(today, -1));
-    const PATS = ["squat", "hinge", "push", "pull", "core", "carry"];
-    const sets = Object.fromEntries(PATS.map(p => [p, 0]));
-    const yesterday = new Set();
+    const d7 = fmt(addDays(today, -7)), d3 = fmt(addDays(today, -3)), d1 = fmt(addDays(today, -1));
+    const PATS = ["squat", "hinge", "push", "pull"];
+    const sets = Object.fromEntries(PATS.concat(["core", "carry"]).map(p => [p, 0]));
+    const mScore = Object.fromEntries(Object.keys(MUSCLES).map(m => [m, 0]));
     const lastDone = {};
+    const powerDates = new Set(), massDates = new Set();
+    let yTrack = null;
     strengthLogs.forEach(l => {
+      const ex = exerciseByName[l.exercise]; if (!ex) return;
       const [pat, lv] = fnOf(l.exercise);
-      if (!exerciseByName[l.exercise]) return;
-      if (l.date >= d7) sets[pat] += (l.sets || 1);
-      if (l.date >= d1 && lv >= 3) yesterday.add(pat);
       if (!lastDone[l.exercise] || l.date > lastDone[l.exercise]) lastDone[l.exercise] = l.date;
+      if (l.date < d7) return;
+      sets[pat] += (l.sets || 1);
+      ex.p.forEach(m => { mScore[m] += (l.sets || 1); }); ex.s.forEach(m => { mScore[m] += (l.sets || 1) * 0.5; });
+      const isPower = SPEED.has(l.exercise) || (lv >= 3 && (l.reps || 99) <= 5);
+      (isPower ? powerDates : massDates).add(l.date);
+      if (l.date >= d1) yTrack = isPower ? "power" : "mass";
     });
-    const pickFor = (pat) => {
-      const pool = EXERCISES.filter(e => fnOf(e.n)[0] === pat && fnOf(e.n)[1] >= 3);
-      // 直近3日にやった種目は後回し。それ以外はカタログ順（＝基本の定番が先）で、マンネリ防止のため
-      // 3日以上あいた種目から選ぶ。
-      const d3 = fmt(addDays(today, -3));
-      pool.sort((a, b) => ((lastDone[a.n] || "0") >= d3) - ((lastDone[b.n] || "0") >= d3));
-      return pool[0] ? pool[0].n : null;
-    };
-    let title, why, picks = [];
-    if (!strengthLogs.length){
-      title = "はじめの一歩：実用的な基本4動作";
-      why = "記録がまだ無いので、日常やスポーツで使う基本の動き（しゃがむ・引く・押す・体幹）から。まずは軽い重量でフォームを覚えましょう。";
-      picks = [["squat", "ゴブレットスクワット"], ["pull", "ラットプルダウン"], ["push", "腕立て伏せ"], ["core", "プランク"]];
+    const auto = !strengthLogs.length ? "mass"
+      : (powerDates.size < massDates.size ? "power" : (massDates.size < powerDates.size ? "mass" : (yTrack === "power" ? "mass" : "power")));
+    const track = recoTrack === "auto" ? auto : recoTrack;
+
+    const recentFirst = (list) => list.slice().sort((a, b) => ((lastDone[a] || "0") >= d3) - ((lastDone[b] || "0") >= d3));
+    const leastRecent = (list) => list.slice().sort((a, b) => (lastDone[a] || "0").localeCompare(lastDone[b] || "0"))[0];
+    const patOrder = PATS.slice().sort((a, b) => sets[a] - sets[b]);
+    const corePick = () => recentFirst(EXERCISES.filter(e => fnOf(e.n)[0] === "core" && fnOf(e.n)[1] >= 3 && !SPEED.has(e.n)).map(e => e.n))[0];
+    const picks = [];
+    let title, why, guide;
+    if (track === "power"){
+      title = "速筋パワー日";
+      why = "速筋（Type II線維）は、速く・強く動かすほど働きます。爆発系を最初に、疲れる前に。次に重い主種目を低回数で。" +
+            `直近7日：パワー日${powerDates.size}日／質量日${massDates.size}日。`;
+      picks.push(["爆発（下半身）", leastRecent(SPEED_LOWER)], ["爆発（上半身）", leastRecent(SPEED_UPPER)]);
+      patOrder.slice(0, 2).forEach(p => picks.push(["重い主種目", HEAVY_MAIN[p]]));
+      picks.push(["体幹", corePick()]);
+      guide = "爆発系：3〜5セット × 3〜5回、毎回「全力で速く」。フォームが崩れる・速さが落ちる前に終了、セット間2〜3分。／重い主種目：3〜5セット × 3〜5回（余力1〜2回、RPE 8〜9）、セット間2〜4分。";
     } else {
-      const order = PATS.filter(p => p !== "carry").sort((a, b) => (yesterday.has(a) - yesterday.has(b)) || (sets[a] - sets[b]));
-      const chosen = order.slice(0, 3);
-      if (!chosen.includes("core")) chosen.push("core");
-      picks = chosen.map(p => [p, pickFor(p)]).filter(x => x[1]);
-      if (sets.carry === 0 && !picks.some(x => x[0] === "carry") && strengthLogs.length >= 6) picks.push(["carry", pickFor("carry")]);
-      const low = order.slice(0, 3).map(p => `${PATTERN_LABEL[p].split("（")[0]}(${sets[p]})`).join("・");
-      title = "今日のおすすめ：実用重視の全身メニュー";
-      why = `直近7日で手薄な動き：${low}（かっこ内はセット数）。` +
-            (yesterday.size ? `昨日やった「${[...yesterday].map(p => PATTERN_LABEL[p].split("（")[0]).join("・")}」は後回しにしています。` : "") +
-            "筋肥大より、全身を使う多関節の基本種目を優先しています。";
+      title = "質量日（筋肥大）";
+      why = "質量のある筋肉は、ボリューム（回数×セット）と負荷の漸進的な増加でつきます。多関節の主種目で土台を、手薄な筋肉へ補助種目を。" +
+            `直近7日：パワー日${powerDates.size}日／質量日${massDates.size}日。`;
+      const mains = patOrder.slice(0, 2).map(p => recentFirst(EXERCISES.filter(e => fnOf(e.n)[0] === p && fnOf(e.n)[1] >= 3 && !SPEED.has(e.n)).map(e => e.n))[0]);
+      mains.forEach(n => picks.push(["主種目", n]));
+      const major = ["chest","delts_side","delts_rear","biceps","triceps","lats","traps","quads","hamstrings","glutes","calves","abs","lower_back"];
+      const weak = major.sort((a, b) => mScore[a] - mScore[b]).slice(0, 2);
+      const acc = weak.map(m => recentFirst(EXERCISES.filter(e => e.p[0] === m && fnOf(e.n)[1] <= 2).map(e => e.n))[0]).filter(Boolean);
+      acc.forEach((n, i) => picks.push([`補助（${MUSCLES[weak[i]]}）`, n]));
+      picks.push(["体幹", corePick()]);
+      guide = "主種目：3〜4セット × 6〜10回（RPE 8〜9、余力0〜2回）。補助：2〜3セット × 10〜15回。全体でセット間1.5〜2分。前回より「回数か重さを少し増やす」ことを毎回の目標に。";
     }
-    const goal = "目安：主要種目は 3〜5セット × 4〜6回（RPE 7〜8・フォーム最優先）。体幹の保持系は 30〜60秒×2〜3セット。回数が楽にこなせたら、まず重さを少し足す。";
+    const care = "質量には、たんぱく質（体重×1.6〜2.2g/日が目安）・十分な食事量・睡眠（7時間以上）も欠かせません。";
+    const tabBtn = (id, label) => `<button type="button" class="reco-track${track === id ? " active" : ""}" data-track="${id}">${label}${auto === id ? "（おすすめ）" : ""}</button>`;
     box.innerHTML = `<div class="reco-title">今日のおすすめメニュー</div>
+      <div class="reco-tracks">${tabBtn("power", "速筋パワー日")}${tabBtn("mass", "質量日")}</div>
       <div class="reco-why"><b>${escapeHtml(title)}</b><br>${escapeHtml(why)}</div>
-      <div class="reco-chips">${picks.map(([pat, n]) =>
-        `<button type="button" class="reco-chip" data-ex="${escapeHtml(n)}"><span class="rc-pat">${escapeHtml(PATTERN_LABEL[pat].split("（")[0])}</span>${escapeHtml(n)}</button>`).join("")}</div>
-      <div class="reco-why" style="margin-top:6px;">${escapeHtml(goal)}</div>`;
+      <div class="reco-chips">${picks.filter(x => x[1]).map(([role, n]) =>
+        `<button type="button" class="reco-chip" data-ex="${escapeHtml(n)}"><span class="rc-pat">${escapeHtml(role)}</span>${escapeHtml(n)}</button>`).join("")}</div>
+      <div class="reco-why" style="margin-top:6px;">${escapeHtml(guide)}</div>
+      <div class="reco-why">${escapeHtml(care)}</div>`;
+    box.querySelectorAll(".reco-track").forEach(b => b.addEventListener("click", () => { recoTrack = b.dataset.track; renderReco(); }));
     box.querySelectorAll(".reco-chip").forEach(b => b.addEventListener("click", () => {
       const ex = exerciseByName[b.dataset.ex];
       if (ex){ currentPart = ex.part; [...document.getElementById("part-tabs").children].forEach(x => x.classList.toggle("active", x.dataset.part === currentPart)); }
