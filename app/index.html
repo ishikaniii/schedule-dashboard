@@ -289,6 +289,13 @@
   .hb-clock{ font-family:"IBM Plex Mono",monospace; font-size:34px; margin-bottom:10px; } .hb-timerbtns{ display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin-bottom:8px; }
   .hb-timerbtns button{ border:1px solid var(--border); background:var(--surface-2); color:var(--ink); border-radius:8px; padding:8px 12px; font-size:13px; cursor:pointer; } .hb-timerbtns .meal-primary{ border:none; background:#5a7d9a; color:#fff; }
   .hb-ev p{ font-size:12.5px; line-height:1.65; margin:8px 0; } .hb-ev a{ color:var(--ink-dim); }
+  .dot.study{ background:#7a5fb0; }
+  .st-open{ display:block; text-align:center; background:#7a5fb0; color:#fff; text-decoration:none; border-radius:10px; padding:12px; font-size:14px; margin-bottom:8px; }
+  .st-row{ display:flex; justify-content:space-between; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--border); font-size:13.5px; }
+  .st-row small{ display:block; color:var(--ink-dim); font-size:11.5px; } .st-late{ color:var(--strength); margin-left:6px; }
+  .st-done{ border:none; background:#7a5fb0; color:#fff; border-radius:8px; padding:6px 12px; font-size:12.5px; cursor:pointer; flex:none; }
+  .st-prog{ color:var(--ink-dim); } .st-area{ display:grid; grid-template-columns:1fr auto auto; gap:10px; align-items:center; padding:6px 0; border-bottom:1px solid var(--border); font-size:13px; }
+  .st-area label{ font-size:12px; color:var(--ink-dim); display:flex; gap:4px; align-items:center; }
   .credit{ font-size:10.5px; color:var(--ink-dim); line-height:1.5; margin:18px 4px 4px; }
   .credit a{ color:var(--ink-dim); }
   .body-hint{ font-size:10.5px; color:var(--ink-dim); text-align:center; line-height:1.3; }
@@ -446,6 +453,7 @@
 <script src="form_anim.js"></script>
 <script src="meal.js"></script>
 <script src="habits.js"></script>
+<script src="study.js"></script>
 <script src="gemini.js"></script>
 </head>
 <body>
@@ -482,6 +490,7 @@
     <button class="nav-btn" data-tab="train">トレログ</button>
     <button class="nav-btn" data-tab="meal">食事</button>
     <button class="nav-btn" data-tab="habit">習慣</button>
+    <button class="nav-btn" data-tab="study">学習</button>
     <button class="nav-btn" data-tab="goals">目標</button>
   </nav>
 
@@ -763,6 +772,8 @@
 
   <section class="panel" id="panel-habit"></section>
 
+  <section class="panel" id="panel-study"></section>
+
   <section class="panel" id="panel-goals">
     <div class="card" id="goals-card">
       <h2><span class="dot goals"></span>人生の目標<span class="tag" id="goals-updated"></span></h2>
@@ -963,7 +974,7 @@
   // 目標は今後タブが増えても常に一番最後（ユーザー指定、2026-09-19）。
   // 新しいタブを追加するときはこの配列とnav要素の両方で「goals」の手前に
   // 挿入すること。スワイプもこの並び順で前後する。
-  const TAB_ORDER = ["home", "budget", "schedule", "train", "meal", "habit", "goals"];
+  const TAB_ORDER = ["home", "budget", "schedule", "train", "meal", "habit", "study", "goals"];
   const tabButtons = document.querySelectorAll(".nav-btn");
   const panels = {
     home: document.getElementById("panel-home"),
@@ -973,6 +984,7 @@
     train: document.getElementById("panel-train"),
     meal: document.getElementById("panel-meal"),
     habit: document.getElementById("panel-habit"),
+    study: document.getElementById("panel-study"),
   };
   const loadedTabs = new Set();
 
@@ -1033,6 +1045,12 @@
     return `${Math.floor(mins/60/24)}日前に同期`;
   }
 
+  let studyCtl = null;
+  function loadStudy(){
+    if (!window.LifeStudy){ panels.study.innerHTML = '<div class="card"><p class="empty">学習タブを読み込めませんでした。</p></div>'; return; }
+    if (!studyCtl) studyCtl = LifeStudy.mount(panels.study, { sb, showBanner });
+    else studyCtl.refresh();
+  }
   let habitCtl = null;
   function loadHabit(){
     if (!window.LifeHabits){ panels.habit.innerHTML = '<div class="card"><p class="empty">習慣タブを読み込めませんでした。</p></div>'; return; }
@@ -1052,6 +1070,7 @@
     else if (tab === "schedule") { loadSchedule(); }
     else if (tab === "meal") { loadMeal(); }
     else if (tab === "habit") { loadHabit(); }
+    else if (tab === "study") { loadStudy(); }
     else if (tab === "goals") { loadGoals(); }
     else if (tab === "train") { renderStrengthChart(); renderCardioChart(); if (!trainInited) initTrain(); }
   }
