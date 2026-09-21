@@ -111,6 +111,16 @@
   button.submit.budget{ background:var(--budget); } button.submit.goals{ background:var(--goals); }
   button.submit:disabled{ opacity:.5; cursor:not-allowed; }
 
+  .tk-h{ font-size:11px; letter-spacing:.06em; color:var(--ink-dim); margin:10px 0 2px; }
+  .tk-row .tk-chk{ width:18px; height:18px; flex:none; }
+  .tk-row .tk-auto{ width:18px; text-align:center; color:var(--ink-dim); flex:none; }
+  .tk-row .tk-kind{ font-size:10px; color:var(--ink-dim); border:1px solid var(--border); border-radius:6px; padding:1px 6px; flex:none; }
+  .tk-row .tk-badge{ font-size:11px; color:var(--ink-dim); flex:none; font-family:"IBM Plex Mono",monospace; }
+  .tk-row.tk-late .tk-badge{ color:var(--strength); font-weight:600; }
+  .tk-add{ display:flex; gap:6px; flex-wrap:wrap; margin-top:12px; }
+  .tk-add input[type=text]{ flex:1 1 180px; min-width:0; }
+  .tk-def{ margin-top:10px; font-size:12px; color:var(--ink-dim); }
+  .tk-def summary{ cursor:pointer; }
   .list{ list-style:none; margin:0; padding:0; }
   .row{ display:flex; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid var(--border); font-size:13.5px; }
   .row:last-child{ border-bottom:none; }
@@ -454,6 +464,7 @@
 <script src="meal.js"></script>
 <script src="habits.js"></script>
 <script src="study.js"></script>
+<script src="tasks.js"></script>
 <script src="gemini.js"></script>
 </head>
 <body>
@@ -496,6 +507,7 @@
 
   <!-- ============ ホーム ============ -->
   <section class="panel active" id="panel-home">
+    <div class="card" id="today-tasks"></div>
     <div class="card">
       <h2><span class="dot budget"></span>今月の予算<span class="tag" id="dash-updated"></span></h2>
       <div id="budget-summary"><p class="empty">まだ同期されていません。PC側の同期スクリプトの実行を待っています。</p></div>
@@ -1121,6 +1133,7 @@
   // タブを切り替えるたびに毎回フェッチし直さないようキャッシュしておく
   // （2026-09-19、スケジュールタブ追加時に導入）。
   let dashboardSnapCache = null;
+  let taskCtl = null;
   // 戻り値: {row}（rowはnull=まだ同期なし、または実データ）／エラー時はundefined
   async function fetchDashboardSnap(){
     const { data, error } = await sb.from("dashboard_snapshot").select("data, updated_at").eq("id", 1).maybeSingle();
@@ -1140,6 +1153,10 @@
     renderReco();   // 予定（空き日の候補）はスナップショットが届いてから出せる
     renderCardioReco();
     const snap = data ? data.data : null;
+    if (window.LifeTasks){
+      if (!taskCtl) taskCtl = LifeTasks.mount(document.getElementById("today-tasks"), { sb, showBanner });
+      taskCtl.refresh(snap);
+    }
     document.getElementById("dash-updated").textContent = data ? timeAgoLabel(data.updated_at) : "";
 
     const budgetEl = document.getElementById("budget-summary");
