@@ -93,6 +93,42 @@
     ["幕の内弁当", "1個", 750, 25, 20, 110, 550, "弁当"],
     ["ミルクティー", "500ml", 150, 2, 3, 28, 150, "紅茶"],
   ];
+
+  // ---------- 自炊レシピ（冷凍OK・高たんぱく・安い・初心者向け） ----------
+  // 栄養は1食分の概算（食品成分表ベース）。作り置き→小分け冷凍→レンジで温め、が基本。
+  const RECIPES = [
+    { name: "鶏むね肉の味噌しょうゆ漬け焼き", tag: "主菜", unit: "1食（約125g）", batch: "6食分（むね肉3枚）",
+      kcal: 150, p: 28, f: 2, c: 3, price: 85,
+      ing: ["鶏むね肉（皮なし）3枚（約750g）", "味噌 大さじ2", "しょうゆ 大さじ1", "みりん 大さじ1", "砂糖 小さじ1", "おろしにんにく（チューブ）少々"],
+      steps: ["むね肉は厚い所に切り込みを入れて厚さをそろえ、半分に切る（フォークで数か所刺すと柔らかくなる）。", "調味料を混ぜ、むね肉と一緒に冷凍用保存袋に入れて、袋の上からもんでなじませる。", "空気を抜いて平らにし、そのまま冷凍する（1食分ずつ小分けにしても良い）。", "食べる日の前夜に冷蔵庫で解凍する。", "フライパンに油を薄くひき、中火で片面3〜4分ずつ、中まで火が通るまで焼く（切って白く、透明な汁が出ればOK）。"],
+      freeze: "冷凍：漬けた状態で約3〜4週間。解凍は冷蔵庫でゆっくり（常温・再冷凍はしない）。焼いた後の冷凍も可（約2〜3週間、レンジで温め直す）。" },
+    { name: "鶏そぼろ（高たんぱく）", tag: "主菜・どんぶり", unit: "1食（約100g）", batch: "4食分（ひき肉400g）",
+      kcal: 135, p: 21, f: 2, c: 5, price: 70,
+      ing: ["鶏ひき肉（むね）400g", "しょうゆ 大さじ2", "みりん 大さじ2", "酒 大さじ2", "砂糖 大さじ1", "しょうが（チューブ）少々"],
+      steps: ["フライパンに、ひき肉と調味料をすべて入れ、火を付ける前によく混ぜる（ダマになりにくい）。", "中火にかけ、菜箸4本でかき混ぜながら、ポロポロになるまで加熱する。", "水分が少なくなり、全体に火が通れば完成。", "粗熱を取り、1食分（約100g）ずつラップに包むか、小分け容器に入れて冷凍する。"],
+      freeze: "冷凍：約3〜4週間。レンジ（600Wで約1分）で温め、ご飯やお弁当に。卵やほうれん草を足すと栄養が増える。" },
+    { name: "豆腐入り鶏ハンバーグ", tag: "主菜", unit: "1個", batch: "4個分",
+      kcal: 165, p: 21, f: 5, c: 5, price: 100,
+      ing: ["鶏ひき肉（むね中心）300g", "木綿豆腐 150g（軽く水切り）", "卵 1個", "パン粉 大さじ4", "玉ねぎ 1/2個（みじん切り）", "塩 小さじ1/3、こしょう少々"],
+      steps: ["玉ねぎをレンジ（600W）で1分加熱して冷ます。", "ボウルに材料をすべて入れ、粘りが出るまでよく混ぜる。", "4等分して小判形にまとめ、中央を軽くくぼませる。", "油を薄くひいたフライパンで、中火で片面3分焼き、裏返してふたをして弱火で5〜6分蒸し焼きにする。", "粗熱を取り、1個ずつラップに包んで、保存袋に入れて冷凍する。"],
+      freeze: "冷凍：約3〜4週間。凍ったまま、または冷蔵庫で解凍して、レンジで温める（600Wで約2分、途中で裏返す）。" },
+    { name: "鶏むねカレー（じゃがいもなし）", tag: "主菜・カレー", unit: "1食（ご飯なし・約250g）", batch: "6食分",
+      kcal: 230, p: 24, f: 9, c: 14, price: 120,
+      ing: ["鶏むね肉（皮なし）500g（ひと口大）", "玉ねぎ 2個", "にんじん 1本", "カレールー 100g（約5皿分）", "水 700ml", "（お好みで）トマト缶・ほうれん草"],
+      steps: ["むね肉は、そぎ切りにして片栗粉を薄くまぶす（パサつき防止）。", "玉ねぎは薄切り、にんじんは小さめの乱切りにする。", "鍋に油を熱して玉ねぎを炒め、透き通ったら肉と、にんじんを加えて炒める。", "水を入れ、沸騰したらアクを取り、弱火で15分煮る。", "火を止めてルーを溶かし、弱火で5分煮る。", "粗熱を取り、1食分ずつ保存袋か容器に入れて冷凍する。"],
+      freeze: "冷凍：約3〜4週間。じゃがいもは冷凍すると食感が悪くなるので入れない。解凍はレンジ（600Wで約3分）。ご飯は別に冷凍しておくと便利。" },
+    { name: "豚こま肉のしょうが焼き（下味冷凍）", tag: "主菜", unit: "1食（約100g）", batch: "4食分（豚こま400g）",
+      kcal: 210, p: 21, f: 11, c: 6, price: 110,
+      ing: ["豚こま切れ肉 400g", "しょうゆ 大さじ2", "みりん 大さじ2", "酒 大さじ1", "砂糖 小さじ2", "しょうが（チューブ）小さじ2", "片栗粉 小さじ2"],
+      steps: ["1食分（約100g）ずつ、冷凍用保存袋に入れる。", "調味料と片栗粉を、袋の上から均等に加え、もんでなじませる。", "平らにして空気を抜き、冷凍する。", "食べる日の前夜に冷蔵庫で解凍する（急ぐときはレンジの解凍モード）。", "フライパンで中火で、肉の色が変わるまで炒め、たれをからめる。キャベツを添えると良い。"],
+      freeze: "冷凍：約3〜4週間。下味冷凍は、焼いてから冷凍するより、味がしみて柔らかい。" },
+    { name: "まとめ炊きご飯の小分け冷凍", tag: "主食", unit: "1食（150g）", batch: "5〜6食分（3合）",
+      kcal: 252, p: 3.8, f: 0.5, c: 55.7, price: 25,
+      ing: ["米 3合（炊飯器で普通に炊く）"],
+      steps: ["炊き上がったら、すぐに1食分（約150g）ずつラップに平らに包む（薄くすると早く冷めて、レンジで温めムラも少ない）。", "粗熱を取ってから、冷凍用保存袋にまとめて入れ、冷凍する。", "食べる時は、ラップのままレンジ（600Wで約2分）。"],
+      freeze: "冷凍：約1か月。炊きたてを、時間を置かず包んで冷凍すると、美味しさが保てる。" },
+  ];
+
   const DEFAULT_TARGET = { kcal: 2600, p: 125, f: 70, c: 365, kg: 65, mode: "gain" };
   const MEALS = ["朝", "昼", "夜", "間食"];
 
@@ -153,6 +189,7 @@
         </div>
         <div class="meal-photo">
           <label class="meal-photo-btn">写真から入力<input type="file" id="mp-file" accept="image/*" hidden></label>
+          <input type="text" id="mp-hint" class="mp-hint" placeholder="補足（任意）：例）鶏むね150g、ご飯200g、手作り" maxlength="120">
           <span id="mp-status" class="meal-hint"></span>
         </div>
         <div id="mp-result"></div>
@@ -176,6 +213,11 @@
             <button type="submit" class="meal-primary">追加</button>
           </form>
         </details>
+      </div>
+      <div class="card meal-card">
+        <h2>自炊レシピ<span class="tag">冷凍OK・高たんぱく・安い</span></h2>
+        <div class="meal-hint">週末に作って小分けで冷凍しておくと、突発的な外出が多い日も、レンジだけで食べられます。栄養は1食分の概算です。</div>
+        <div id="meal-recipes"></div>
       </div>
       <div class="card meal-card"><h2>この日の食事</h2><ul class="list" id="meal-list"></ul></div>
       <div class="card meal-card">
@@ -303,6 +345,21 @@
     }
 
 
+    // ---------------- 自炊レシピ ----------------
+    $("meal-recipes").innerHTML = RECIPES.map((r, i) => `
+      <details class="meal-recipe"><summary><b>${esc(r.name)}</b><span>${esc(r.unit)}：${r.kcal}kcal・P${r.p}g・約${r.price}円</span></summary>
+        <div class="mr-body">
+          <div class="meal-hint">${esc(r.tag)}／作る量：${esc(r.batch)}／1食（${esc(r.unit)}）：F${r.f}g・C${r.c}g</div>
+          <div class="mr-h">材料</div><ul>${r.ing.map(x => `<li>${esc(x)}</li>`).join("")}</ul>
+          <div class="mr-h">作り方</div><ol>${r.steps.map(x => `<li>${esc(x)}</li>`).join("")}</ol>
+          <div class="mr-h">冷凍・温め直し</div><p>${esc(r.freeze)}</p>
+          <button type="button" class="meal-primary mr-add" data-i="${i}">この1食を記録（食事の種類は上の選択）</button>
+        </div></details>`).join("");
+    $("meal-recipes").querySelectorAll(".mr-add").forEach(b => b.addEventListener("click", async () => {
+      const r = RECIPES[+b.dataset.i];
+      if (await add({ date: day, meal: $("meal-type").value, name: "手作り：" + r.name, kcal: r.kcal, protein: r.p, fat: r.f, carb: r.c, price: r.price })) { fetchAll(); b.textContent = "記録しました"; }
+    }));
+
     // ---------------- 検索（辞書＋Open Food Facts） ----------------
     let scale = null;            // 100gあたりの栄養（Open Food Facts）→ 量(g)から計算
     const openManual = () => { const d = root.querySelector(".meal-manual:has(#meal-form)") || $("meal-form").closest("details"); if (d) d.open = true; };
@@ -415,7 +472,7 @@
         const b64 = await toJpegBase64(file), model = await pickModel(key);
         const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`, {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ contents: [{ parts: [{ text: PROMPT }, { inline_data: { mime_type: "image/jpeg", data: b64 } }] }], generationConfig: { temperature: 0.2, responseMimeType: "application/json" } }),
+          body: JSON.stringify({ contents: [{ parts: [{ text: PROMPT + ($("mp-hint").value.trim() ? "\n補足情報（量や材料など、写真より優先してください）：" + $("mp-hint").value.trim() : "") + (/手作り|自炊/.test($("mp-hint").value) ? "\n手作りの料理なので、家庭の一般的な調理（油や調味料の量）で推定してください。" : "") }, { inline_data: { mime_type: "image/jpeg", data: b64 } }] }], generationConfig: { temperature: 0.2, responseMimeType: "application/json" } }),
         });
         if (r.status === 400 || r.status === 401 || r.status === 403) throw new Error("キーが正しくないか、権限がありません（" + r.status + "）。キーを確認してください。");
         if (r.status === 429) throw new Error("無料枠の利用上限に達しました。しばらく待ってからやり直してください。");
