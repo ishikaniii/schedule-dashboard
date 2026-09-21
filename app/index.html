@@ -758,6 +758,10 @@
       </div>
       <div class="card">
         <h2><span class="dot cardio"></span>有酸素を記録</h2>
+        <details class="reco" id="creco-details">
+          <summary>今日の有酸素おすすめ</summary>
+          <div id="creco-box"></div>
+        </details>
         <form id="form-cardio">
           <div class="field"><label for="c-date">日付</label><input type="date" id="c-date" required></div>
           <div class="field">
@@ -1029,6 +1033,7 @@
     // から読むので、スナップショットが届いた時点で描き直す。
     renderAdherenceAndStats();
     renderReco();   // 予定（空き日の候補）はスナップショットが届いてから出せる
+    renderCardioReco();
     const snap = data ? data.data : null;
     document.getElementById("dash-updated").textContent = data ? timeAgoLabel(data.updated_at) : "";
 
@@ -2614,6 +2619,34 @@
   }
   const ANIM_ENABLED = true;
 
+  // 指定日に、連続 minutes 分の空き（7〜22時、バイト・授業・私用の予定＋前後30分を除く）が
+  // 取れるか。取れれば開始時刻（分）、取れなければ null。17時前後が取れるならそこを優先。
+  function freeSlotFor(ds, minutes){
+    const snap0 = dashboardSnapCache ? dashboardSnapCache.data : null;
+    const evs = (snap0 && snap0.calendar_events) || [];
+    const busy = [];
+    for (const e of evs){
+      if (e.date !== ds || !["shift", "class", "personal"].includes(e.family_type)) continue;
+      if (!e.start_time){ if (e.family_type === "personal") return null; continue; }      // 私用の終日予定＝その日は埋まっている
+      const st = toMinutes(e.start_time); let en = e.end_time ? toMinutes(e.end_time) : st + 60;
+      if (en <= st) en = 24 * 60;                                                           // 日付をまたぐ予定（深夜バイト）
+      busy.push([st - 30, en + 30]);
+    }
+    for (const e of evs){   // 前日から日跨ぎで続く予定（深夜バイトの翌日分）は、その日の午前を埋める
+      if (e.family_type === "shift" && e.end_time && e.start_time && toMinutes(e.end_time) <= toMinutes(e.start_time)
+          && ymd(addDays(parseYmd(e.date), 1)) === ds) busy.push([0, toMinutes(e.end_time) + 30]);
+    }
+    busy.sort((x, y) => x[0] - y[0]);
+    let cur = 7 * 60; const gaps = [];
+    for (const [bs, be] of busy){ if (bs - cur >= minutes) gaps.push([cur, bs]); cur = Math.max(cur, be); }
+    if (22 * 60 - cur >= minutes) gaps.push([cur, 22 * 60]);
+    if (!gaps.length) return null;
+    const around17 = gaps.find(g => g[0] <= 17 * 60 && g[1] >= 17 * 60 + minutes);
+    if (around17) return 17 * 60;
+    const g = gaps.find(g => g[1] >= 15 * 60) || gaps[0];                                   // 夕方以降を優先
+    return Math.max(g[0], 15 * 60 <= g[1] - minutes ? 15 * 60 : g[0]);
+  }
+
   // ---- 今日のおすすめメニュー（速筋パワー日 / 質量日、2026-09-20） ----
   // 目的：①速筋（Type II線維）を鍛える＝爆発的に動かす・重いものを速く挙げる、
   //       ②質量のある筋肉をつける＝ボリューム（回数×セット）と漸進的な負荷増加。
@@ -2683,30 +2716,7 @@
     // 17時前後が取れるならそこ、無理なら取れる一番早い時間を候補にする。連続しないよう1日あけて選ぶ。
     const snap = dashboardSnapCache ? dashboardSnapCache.data : null;
     const evs = (snap && snap.calendar_events) || [];
-    const freeSlot = (ds) => {
-      const busy = [];
-      for (const e of evs){
-        if (e.date !== ds || !["shift", "class", "personal"].includes(e.family_type)) continue;
-        if (!e.start_time){ if (e.family_type === "personal") return null; continue; }      // 私用の終日予定＝その日は埋まっている
-        const st = toMinutes(e.start_time); let en = e.end_time ? toMinutes(e.end_time) : st + 60;
-        if (en <= st) en = 24 * 60;                                                           // 日付をまたぐ予定（深夜バイト）
-        busy.push([st - 30, en + 30]);
-      }
-      // 前日から日跨ぎで続く予定（深夜バイトの翌日分）は、その日の午前を埋める
-      for (const e of evs){
-        if (e.family_type === "shift" && e.end_time && e.start_time && toMinutes(e.end_time) <= toMinutes(e.start_time)
-            && ymd(addDays(parseYmd(e.date), 1)) === ds) busy.push([0, toMinutes(e.end_time) + 30]);
-      }
-      busy.sort((x, y) => x[0] - y[0]);
-      let cur = 7 * 60; const gaps = [];
-      for (const [bs, be] of busy){ if (bs - cur >= 90) gaps.push([cur, bs]); cur = Math.max(cur, be); }
-      if (22 * 60 - cur >= 90) gaps.push([cur, 22 * 60]);
-      if (!gaps.length) return null;
-      const around17 = gaps.find(g => g[0] <= 17 * 60 && g[1] >= 18.5 * 60);
-      if (around17) return 17 * 60;
-      const g = gaps.find(g => g[1] >= 15 * 60) || gaps[0];                                 // 夕方以降を優先
-      return Math.max(g[0], 15 * 60 <= g[1] - 90 ? 15 * 60 : g[0]);
-    };
+    const freeSlot = (ds) => freeSlotFor(ds, 90);
     const fmtHM2 = (m) => `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`;
     const freeDays = [];
     for (let i = trainedToday ? 1 : 0; i <= 6 - wd; i++){
@@ -2855,6 +2865,7 @@
 
   function onTrainDataChanged(){
     renderReco();
+    renderCardioReco();
     renderRecentTrain();
     populateExerciseSelect();
     renderAdherenceAndStats();
@@ -2916,6 +2927,95 @@
     return m ? m[1] : "有酸素";
   }
   const cardioNote = (l) => (l.note || "").replace(/^【.+?】\s*/, "");
+
+  // ---- 今日の有酸素おすすめ（2026-09-20） ----
+  // 方針：速筋（Type II）を鍛えたい＋質量をつけたい → 有酸素は「高強度・短時間（速筋にも効く）」を
+  // 週1〜2回、それ以外は「低強度・長め（回復・持久力）」。筋肥大を邪魔しないよう、脚を追い込んだ
+  // 翌日は低衝撃の低強度へ。週の進み具合（型）と、カレンダーの空き（60分）から実施日を提案。
+  const CARDIO_FAST = ["ダッシュ（スプリント）", "インターバル走", "坂道ダッシュ", "縄跳び", "HIIT（高強度インターバル）", "ボクシング・シャドー"];
+  const CARDIO_BASE = ["ジョギング", "エアロバイク", "ウォーキング", "自転車（ロード）", "水泳", "ローイング"];
+  const CARDIO_TEMPL = { 1: ["fast"], 2: ["fast", "base"], 3: ["fast", "base", "base"], 4: ["fast", "base", "fast", "base"] };
+  const CARDIO_DOSE = {
+    fast: "ウォームアップ5〜10分＋全力の短い本数（合計15〜25分）。毎回「速く」を最優先、質が落ちたら終了。",
+    base: "20〜40分、会話できる強さ（きついと感じない）。回復と持久力づくりに。",
+  };
+  function renderCardioReco(){
+    const box = document.getElementById("creco-box");
+    if (!box) return;
+    const today = new Date(), fmt = (d) => ymd(d);
+    const wd = (today.getDay() + 6) % 7, weekStartStr = fmt(addDays(today, -wd));
+    const d1 = fmt(addDays(today, -1)), d3 = fmt(addDays(today, -3)), todayS = fmt(today);
+    const perWeek = Math.min(4, Math.max(1, parseInt(localStorage.getItem("lb_cardio_per_week") || "2", 10) || 2));
+    const isFast = (n) => CARDIO_FAST.includes(n);
+    const week = cardioLogs.filter(l => l.date >= weekStartStr);
+    const doneTypes = []; const seenDay = {};
+    week.forEach(l => { const t = isFast(cardioName(l)) ? "fast" : "base"; seenDay[l.date] = (seenDay[l.date] === "fast" || t === "fast") ? "fast" : "base"; });
+    Object.values(seenDay).forEach(t => doneTypes.push(t));
+    const remaining = CARDIO_TEMPL[perWeek].slice();
+    doneTypes.forEach(t => { const i = remaining.indexOf(t); if (i >= 0) remaining.splice(i, 1); else remaining.shift(); });
+    const doneToday = !!seenDay[todayS];
+
+    // 脚の疲労：昨日（または今日）に脚の主種目・爆発系をやっていたら、衝撃の大きい高強度は避ける
+    const legHeavy = (date) => strengthLogs.some(l => l.date === date && exerciseByName[l.exercise]
+      && ["squat", "hinge"].includes(fnOf(l.exercise)[0]) && (fnOf(l.exercise)[1] >= 3 || SPEED.has(l.exercise)));
+    const legY = legHeavy(d1), legT = legHeavy(todayS);
+    let next = remaining[0] || "base";
+    let note = "";
+    if (next === "fast" && (legY || legT)){
+      next = "base";
+      note = legT ? "今日は脚をしっかり鍛えているので、有酸素は低強度に（高強度は別の日へ）。" : "昨日脚を追い込んだので、今日は衝撃の少ない低強度に。高強度は脚が回復してから。";
+    }
+    const lastDoneC = {};
+    cardioLogs.forEach(l => { const n = cardioName(l); if (!lastDoneC[n] || l.date > lastDoneC[n]) lastDoneC[n] = l.date; });
+    const pick = (pool) => pool.slice().sort((a, b) => ((lastDoneC[a] || "0") >= d3) - ((lastDoneC[b] || "0") >= d3)
+      || (lastDoneC[a] || "0").localeCompare(lastDoneC[b] || "0"))[0];
+    const primary = pick(next === "fast" ? CARDIO_FAST : CARDIO_BASE);
+    const alt = pick((next === "fast" ? CARDIO_FAST : CARDIO_BASE).filter(n => n !== primary));
+    const otherType = next === "fast" ? "base" : "fast";
+    const other = pick(otherType === "fast" ? CARDIO_FAST : CARDIO_BASE);
+
+    // 実施日の候補：残り回数ぶん、60分の空きがある日。筋トレ予定日は避け、連続しないように
+    const evs = ((dashboardSnapCache ? dashboardSnapCache.data : null) || {}).calendar_events || [];
+    const gymDay = (ds) => evs.some(e => e.date === ds && e.family_type === "health" && /筋トレ/.test(e.title || ""));
+    const cand = [];
+    for (let i = doneToday ? 1 : 0; i <= 6 - wd; i++){
+      const ds = fmt(addDays(today, i)), slot = freeSlotFor(ds, 60);
+      if (slot != null) cand.push({ ds, i, slot, gym: gymDay(ds) });
+    }
+    const need = remaining.length;
+    const chosen = [];
+    [...cand.filter(d => !d.gym), ...cand.filter(d => d.gym)].forEach(d => {
+      if (chosen.length < need && chosen.every(c => Math.abs(c.i - d.i) >= 2)) chosen.push(d);
+    });
+    chosen.sort((a, b) => a.i - b.i);
+    const DOWJ = ["日", "月", "火", "水", "木", "金", "土"];
+    const lab = (d) => `${d.i === 0 ? "今日" : DOWJ[parseYmd(d.ds).getDay()] + "(" + d.ds.slice(5).replace("-", "/") + ")"} ${Math.floor(d.slot / 60)}:${String(d.slot % 60).padStart(2, "0")}ごろ〜`;
+    const weekLine = need
+      ? `今週：週${perWeek}回の目標のうち${doneTypes.length}回済み → 残り${need}回（${remaining.map(t => t === "fast" ? "高強度" : "低強度").join("→")}）。` +
+        (chosen.length ? `空き状況からの候補日：${chosen.map(lab).join("・")}。` : "60分続けて空いている日が見つかりません（短めにするか次週へ）。")
+      : `今週：週${perWeek}回の目標は達成済みです。追加なら低強度（ウォーキングなど）で回復を。`;
+    const chip = (n, role) => `<button type="button" class="reco-chip creco-chip" data-cx="${escapeHtml(n)}"><span class="rc-pat">${role}</span>${escapeHtml(n)}</button>`;
+    const tipOf = (n) => (CARDIO.find(c => c.n === n) || {}).tip || "";
+    box.innerHTML = `<div class="reco-week">${escapeHtml(weekLine)}<label class="reco-perweek">週<select id="creco-perweek">${[1,2,3,4].map(n => `<option value="${n}"${n === perWeek ? " selected" : ""}>${n}</option>`).join("")}</select>回</label></div>
+      <div class="reco-why"><b>今日のおすすめ：${next === "fast" ? "⚡高強度（速筋にも効く）" : "低強度（回復・持久力）"}</b>${note ? "<br>" + escapeHtml(note) : ""}</div>
+      <div class="reco-chips">${chip(primary, "おすすめ")}${alt ? chip(alt, "代わり") : ""}</div>
+      <div class="reco-why" style="margin-top:6px;">${escapeHtml(tipOf(primary))}<br>${escapeHtml(CARDIO_DOSE[next])}</div>
+      <div class="reco-why">${otherType === "fast" ? "高強度" : "低強度"}の日の候補：${escapeHtml(other)}。${escapeHtml(otherType === "fast" ? "高強度は脚の疲れがない日に、週1〜2回まで。" : "")}</div>`;
+    const pw = box.querySelector("#creco-perweek");
+    if (pw) pw.addEventListener("change", () => { try{ localStorage.setItem("lb_cardio_per_week", pw.value); }catch(e){} renderCardioReco(); });
+    box.querySelectorAll(".creco-chip").forEach(b => b.addEventListener("click", () => {
+      cSel.value = b.dataset.cx; showCTip();
+      cSel.scrollIntoView({ behavior: "smooth", block: "center" });
+    }));
+  }
+  (function(){   // 開閉（状態は端末に保存、初期は開く）
+    const det = document.getElementById("creco-details");
+    if (!det) return;
+    let open = true; try{ open = localStorage.getItem("lb_creco_open") !== "0"; }catch(e){}
+    det.open = open;
+    det.addEventListener("toggle", () => { try{ localStorage.setItem("lb_creco_open", det.open ? "1" : "0"); }catch(e){} });
+  })();
+  renderCardioReco();
 
   document.getElementById("form-cardio").addEventListener("submit", async (e) => {
     e.preventDefault();
