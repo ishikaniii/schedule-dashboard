@@ -450,7 +450,7 @@
       <p class="empty" id="ledger-link-wrap" style="padding:8px 0;">同期後にリンクが表示されます。</p>
     </div>
     <div class="card">
-      <h2><span class="dot budget"></span>レシートから記録</h2>
+      <h2><span class="dot budget"></span>家計簿に記録（レシート・手入力）</h2>
       <div class="field">
         <label for="receipt-file">レシート写真</label>
         <!-- capture="environment"を付けるとカメラ起動が強制され、スクリーン
@@ -458,11 +458,16 @@
              （2026-09-19）。端末側でカメラ/アルバムどちらか選べる。 -->
         <input type="file" id="receipt-file" accept="image/*">
       </div>
+      <button type="button" class="submit budget" id="manual-entry-btn" style="margin-bottom:8px;">写真なしで手入力する</button>
       <img id="receipt-preview" class="ocr-preview">
       <div class="ocr-status" id="ocr-status"></div>
       <div class="ocr-cands" id="ocr-cands"></div>
       <details id="ocr-raw-wrap" class="ocr-raw-wrap" style="display:none;"><summary>読み取った文字を見る</summary><pre id="ocr-raw"></pre></details>
       <form id="form-receipt" style="display:none;">
+        <div class="field">
+          <label for="r-date">日付</label>
+          <input type="date" id="r-date" required>
+        </div>
         <div class="row2">
           <div class="field">
             <label for="r-amount">金額(円)</label>
@@ -1901,6 +1906,30 @@
     return texts;
   }
 
+  // レシートに印字された日付（2026年09月20日 など）を読む。今日から見て未来／60日より
+  // 前の日付は誤読の可能性が高いので使わず、今日にする。
+  function receiptDateFrom(text){
+    const t = String(text || "").normalize("NFKC");
+    const m = t.match(/(20\d{2})\s*[-\/年.]\s*(\d{1,2})\s*[-\/月.]\s*(\d{1,2})/);
+    const today = new Date(); today.setHours(0,0,0,0);
+    if (m){
+      const d = new Date(+m[1], +m[2] - 1, +m[3]);
+      if (!isNaN(d) && d <= new Date(today.getTime() + 86400000) && d >= new Date(today.getTime() - 60*86400000)) return ymd(d);
+    }
+    return ymd(new Date());
+  }
+
+  // 写真なしの手入力：フォームをそのまま開く（日付は今日、金額は空）
+  document.getElementById("manual-entry-btn").addEventListener("click", () => {
+    formReceipt.reset();
+    document.getElementById("r-date").value = ymd(new Date());
+    receiptPreview.style.display = "none"; receiptFile.value = "";
+    ocrCands.innerHTML = ""; ocrRawWrap.style.display = "none";
+    ocrStatus.textContent = "金額・カテゴリ・メモを入れて「記録する」を押してください。";
+    formReceipt.style.display = "block";
+    document.getElementById("r-amount").focus();
+  });
+
   receiptFile.addEventListener("change", async () => {
     const file = receiptFile.files[0];
     if (!file) return;
@@ -1920,6 +1949,7 @@
       const categoryMsg = category ? `分類の候補: ${category}` : null;
       ocrStatus.textContent = [amountMsg, categoryMsg].filter(Boolean).join(" / ") + "（下で確認・修正してください）";
       document.getElementById("r-amount").value = amount || "";
+      document.getElementById("r-date").value = receiptDateFrom(all);
       if (category) document.getElementById("r-category").value = category;
       if (conf === "低" || (cands[1] && cands[1].score >= cands[0].score * 0.5)){
         ocrCands.innerHTML = '<span class="oc-label">他の候補：</span>' + cands.slice(0, 5).map(c =>
@@ -2144,8 +2174,13 @@
     e.preventDefault();
     const btn = document.getElementById("r-submit");
     btn.disabled = true;
+    // 日付は created_at に入れる（PC側の同期はこの日付で家計簿に記録する）。
+    // 今日なら現在時刻、過去日なら正午（日本時間）にして日付ずれを防ぐ。
+    const rDate = document.getElementById("r-date").value || ymd(new Date());
+    const createdAt = rDate === ymd(new Date()) ? new Date().toISOString() : new Date(rDate + "T12:00:00+09:00").toISOString();
     const { error } = await sb.from("pending_expenses").insert({
       origin: "receipt_scan",
+      created_at: createdAt,
       amount: parseInt(document.getElementById("r-amount").value, 10),
       category: document.getElementById("r-category").value,
       memo: document.getElementById("r-memo").value.trim(),
