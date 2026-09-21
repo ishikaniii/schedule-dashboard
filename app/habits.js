@@ -39,6 +39,14 @@
     ] },
   ];
 
+  // まず効果を試したい4つ（朝の光・起床時刻・夜の呼吸か瞑想・明日のToDo）。初期はこの4つだけ出し、
+  // 「すべて表示」で16項目に広げる（2026-09-22）。ここに無い項目のチェック済みの記録は消えない。
+  const CORE = ["light", "wake", "calm", "todo"];
+  const FULL_KEY = "lb_habit_full";
+  const isFull = () => { try { return localStorage.getItem(FULL_KEY) === "1"; } catch (e) { return false; } };
+  const visItems = (g) => isFull() ? g.items : g.items.filter(i => CORE.includes(i[0]));
+  const visGroups = () => GROUPS.map(g => ({ ...g, items: visItems(g) })).filter(g => g.items.length);
+
   function mount(root, ctx) {
     const sb = ctx.sb;
     const today = ymd(new Date());
@@ -158,10 +166,13 @@
       const nt = $("hb-notice");
       if (useLocal) { nt.style.display = "block"; nt.innerHTML = "いまは、この端末だけに保存しています（他の端末とは共有されません）。共有するには、Supabaseで schema.sql の <b>habit_logs</b> のSQLを実行してください。"; } else nt.style.display = "none";
       const r = cur(), checks = r.checks || {};
-      const total = GROUPS.reduce((n, g) => n + g.items.length, 0), done = Object.values(checks).filter(Boolean).length;
+      const vg = visGroups(), visKeys = new Set(vg.flatMap(g => g.items.map(i => i[0])));
+      const total = visKeys.size, done = [...visKeys].filter(k => checks[k]).length;
       $("hb-progress").innerHTML = `<div class="mrow"><div class="ml">達成</div><div class="mtrack"><div class="mfill" style="width:${Math.round(done / total * 100)}%"></div></div><div class="mv">${done} / ${total}</div></div>`;
-      $("hb-checklist").innerHTML = GROUPS.map(g => `<div class="hb-group"><div class="hb-gt">${g.title}<span>${g.items.filter(i => checks[i[0]]).length}/${g.items.length}</span></div>` +
-        g.items.map(i => `<label class="hb-item"><input type="checkbox" data-k="${i[0]}"${checks[i[0]] ? " checked" : ""}><span>${esc(i[1])}${i[2] ? `<small>${esc(i[2])}</small>` : ""}</span></label>`).join("") + `</div>`).join("");
+      $("hb-checklist").innerHTML = vg.map(g => `<div class="hb-group"><div class="hb-gt">${g.title}<span>${g.items.filter(i => checks[i[0]]).length}/${g.items.length}</span></div>` +
+        g.items.map(i => `<label class="hb-item"><input type="checkbox" data-k="${i[0]}"${checks[i[0]] ? " checked" : ""}><span>${esc(i[1])}${i[2] ? `<small>${esc(i[2])}</small>` : ""}</span></label>`).join("") + `</div>`).join("") +
+        `<button type="button" id="hb-fulltoggle" style="margin-top:8px;background:none;border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:12px;color:var(--ink-dim);cursor:pointer;">${isFull() ? "4つだけ表示に戻す" : "すべて表示（全16項目）"}</button>`;
+      $("hb-fulltoggle").onclick = () => { try { localStorage.setItem(FULL_KEY, isFull() ? "0" : "1"); } catch (e) { /* 保存不可 */ } render(); };
       $("hb-checklist").querySelectorAll("input[type=checkbox]").forEach(cb => cb.addEventListener("change", () => {
         const c = { ...(cur().checks || {}) }; c[cb.dataset.k] = cb.checked; save({ checks: c }); render();
       }));

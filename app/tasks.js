@@ -1,8 +1,8 @@
 // LifeBase「今日やること」（2026-09-22）
 // 散らばっていた「やること」を、ホームの1か所に集めて、優先順に並べる。
 // 何がタスクか（定義）：
-//   必須：今日まで（または過ぎた）締切の課題、【タスク】の私用予定、自分で追加したタスクで期限が今日まで
-//   推奨：3日以内に締切がある課題の着手、復習カード、未確認の支出、予定済みの運動で未記録のもの、期限が近い自分のタスク
+//   必須：締切の前日・当日（過ぎたもの含む）の課題、【タスク】の私用予定、自分で追加したタスクで期限が今日まで
+//   推奨：締切4日前からの課題の着手（段階ごと）、復習カード、未確認の支出、予定済みの運動で未記録のもの、期限が近い自分のタスク
 // 保存：自分で追加したタスクは Supabase の tasks、チェックは task_checks（key単位）。
 //       テーブルが無い間は、この端末のlocalStorageで動く。
 (function (global) {
@@ -13,6 +13,8 @@
   const esc = (s) => (s == null ? "" : String(s)).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const ls = { get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : v; } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* 保存不可 */ } } };
   const LS_TASKS = "lb_tasks", LS_CHECKS = "lb_task_checks";
+
+  const STAGES = ["提出する", "見直して仕上げる", "下書きを書く", "構成を決める・資料を集める"];
 
   function mount(root, ctx) {
     const sb = ctx.sb;
@@ -51,19 +53,24 @@
     // 今日の一覧を組み立てる。level: 0=必須, 1=推奨。
     function build(today) {
       const items = [];
-      const tomorrow = ymd(addDays(new Date(), 1)), in3 = ymd(addDays(new Date(), 3)), back7 = ymd(addDays(new Date(), -7));
+      const in3 = ymd(addDays(new Date(), 3)), back7 = ymd(addDays(new Date(), -7));
       const evs = (snap && snap.calendar_events) || [];
       for (const e of evs) {
         const title = e.title || "";
         if (e.family_type === "assignment_due") {
           if (title.startsWith("✅")) continue;                // 提出済み
-          if (e.date < back7 || e.date > in3) continue;
-          const key = "as:" + (e.id || e.date + title);
+          if (e.date < back7) continue;
+          // 締切までの日数で「今日やる段階」を決める（課題の大きさは分からないので、
+          // 一律に 構成→下書き→見直し→提出 の4段階に分ける）。段階ごとにチェックできる。
+          const left = Math.round((new Date(e.date + "T00:00:00") - new Date(today + "T00:00:00")) / 86400000);
+          if (left > 4) continue;
+          const stage = left <= 0 ? 0 : left === 1 ? 1 : left === 2 ? 2 : 3;
+          const key = "as:" + (e.id || e.date + title) + ":" + stage;
           if (checks.has(key)) continue;
-          const late = e.date < today;
-          const level = e.date <= today ? 0 : 1;
-          const when = late ? `期限切れ（${e.date.slice(5)}）` : (e.date === today ? "今日締切" : (e.date === tomorrow ? "明日締切" : e.date.slice(5) + " 締切"));
-          items.push({ key, level, sort: e.date, label: title, badge: when, kind: "課題", late });
+          const late = left < 0;
+          const level = left <= 1 ? 0 : 1;
+          const when = late ? `期限切れ（${e.date.slice(5)}）` : (left === 0 ? "今日締切" : (left === 1 ? "明日締切" : e.date.slice(5) + " 締切"));
+          items.push({ key, level, sort: e.date, label: `${title}：${STAGES[stage]}`, badge: when, kind: "課題", late });
         } else if (e.family_type === "personal" && title.startsWith("【タスク】")) {
           if (e.date > today || e.date < back7) continue;
           const key = "pl:" + (e.id || e.date + title);
@@ -108,8 +115,8 @@
           <button type="submit" class="submit goals" style="width:auto;padding:8px 14px;margin:0;">追加</button>
         </form>
         <details class="tk-def"><summary>何がタスク？（表示のルール）</summary>
-          <p><b>必須</b>：今日まで（過ぎたもの含む）の締切の課題／カレンダーの【タスク】予定／自分で追加した期限が今日まで（または期限なし）のタスク。</p>
-          <p><b>推奨</b>：3日以内に締切の課題／復習カード／未確認の支出／予定済みで未記録の運動／期限が近い自分のタスク。</p>
+          <p><b>必須</b>：締切の前日・当日（過ぎたもの含む）の課題／カレンダーの【タスク】予定／自分で追加した期限が今日まで（または期限なし）のタスク。</p>
+          <p><b>推奨</b>：締切まで4日以内の課題（4日前：構成・資料集め → 2日前：下書き → 前日：見直し → 当日：提出）／復習カード／未確認の支出／予定済みで未記録の運動／期限が近い自分のタスク。</p>
           <p>「•」の項目は、済むと自動で消えます。カレンダーに【タスク】と付けた予定は、ここに出ます。</p>
         </details>`;
 
