@@ -271,6 +271,7 @@
   .meal-photo-btn{ display:inline-block; border:1px solid #c9772b; color:#c9772b; border-radius:999px; padding:7px 16px; font-size:13px; cursor:pointer; }
   .mp-row{ border:1px solid var(--border); border-radius:10px; padding:8px 10px; margin:6px 0; font-size:13px; } .mp-row small{ color:var(--ink-dim); }
   .mp-nums{ display:flex; gap:4px; align-items:center; flex-wrap:wrap; margin-top:6px; } .mp-nums input{ width:4.6em; } .mp-nums span{ font-size:11px; color:var(--ink-dim); margin-right:6px; }
+  .meal-cats-btn{ border:1px solid var(--border); background:var(--surface-2); color:var(--ink-dim); border-radius:999px; padding:4px 12px; font-size:12px; cursor:pointer; margin:4px 0; }
   .credit{ font-size:10.5px; color:var(--ink-dim); line-height:1.5; margin:18px 4px 4px; }
   .credit a{ color:var(--ink-dim); }
   .body-hint{ font-size:10.5px; color:var(--ink-dim); text-align:center; line-height:1.3; }
@@ -427,6 +428,7 @@
 <script src="form_guide.js"></script>
 <script src="form_anim.js"></script>
 <script src="meal.js"></script>
+<script src="gemini.js"></script>
 </head>
 <body>
 
@@ -536,8 +538,14 @@
         <button type="button" class="submit budget" id="manual-entry-btn" style="flex:1 1 140px;">支出を手入力</button>
         <button type="button" class="submit budget" id="manual-income-btn" style="flex:1 1 140px;">収入を入力</button>
       </div>
+      <details class="meal-manual" id="rcpt-ai-settings" style="margin:6px 0;"><summary>AIで読み取る設定（Gemini・無料枠）</summary>
+        <div class="meal-hint">キーを保存すると、レシートをAI（Gemini）が読み取ります（店名・日付・金額・分類まで）。未設定のときや失敗したときは、今までどおり端末内の文字認識で読みます。<a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">Google AI Studio</a> で無料のAPIキーを作って貼り付けてください（クレジットカード不要）。キーはこの端末のブラウザにだけ保存されます。レシートの画像はGoogleに送信されます（無料枠では入力内容が改善に使われる場合があります）。カード番号や個人情報が写るレシートは避けてください。食事タブの写真認識も同じキーを使います。</div>
+        <div class="meal-weight"><input type="password" id="rcpt-key" placeholder="APIキー（AIza…）" autocomplete="off"><button type="button" id="rcpt-keysave" class="meal-primary">保存</button><button type="button" id="rcpt-keydel">削除</button></div>
+        <div class="meal-hint" id="rcpt-keystate"></div>
+      </details>
       <img id="receipt-preview" class="ocr-preview">
       <div class="ocr-status" id="ocr-status"></div>
+      <button type="button" id="ocr-local-btn" class="meal-cats-btn" style="display:none;">端末内（無料・オフライン）で読み直す</button>
       <div class="ocr-cands" id="ocr-cands"></div>
       <details id="ocr-raw-wrap" class="ocr-raw-wrap" style="display:none;"><summary>読み取った文字を見る</summary><pre id="ocr-raw"></pre></details>
       <form id="form-receipt" style="display:none;">
@@ -1990,6 +1998,19 @@
   //  ③ 金額の判定：全角→半角、¥の誤読（Y・羊など）、桁区切り、「お預り−お釣り＝合計」
   //     の突き合わせ。それでも自信が無ければ候補ボタンを並べ、押して選べるようにする。
   //  ④ 読み取った文字も見られるようにして、外したときに原因が分かるようにする。
+  let forceLocalOcr = false, lastReceiptFile = null;
+  const $ = (id) => document.getElementById(id);
+  {
+    const stateEl = () => { $("rcpt-keystate").textContent = (window.LifeGemini && LifeGemini.hasKey()) ? "APIキーは保存済みです（この端末のみ）。AIで読み取ります。" : "APIキーは未設定です（端末内の文字認識で読み取ります）。"; };
+    document.addEventListener("DOMContentLoaded", stateEl);
+    setTimeout(stateEl, 0);
+    $("rcpt-keysave").addEventListener("click", () => { const v = $("rcpt-key").value.trim(); if (!v) return; LifeGemini.setKey(v); $("rcpt-key").value = ""; stateEl(); });
+    $("rcpt-keydel").addEventListener("click", () => { LifeGemini.setKey(""); stateEl(); });
+    $("ocr-local-btn").addEventListener("click", () => {
+      if (!lastReceiptFile && !receiptFile.files[0]) return;
+      forceLocalOcr = true; receiptFile.dispatchEvent(new Event("change")); setTimeout(() => { forceLocalOcr = false; }, 0);
+    });
+  }
   const ocrCands = document.getElementById("ocr-cands");
   const ocrRawWrap = document.getElementById("ocr-raw-wrap");
   const ocrRaw = document.getElementById("ocr-raw");
@@ -2104,6 +2125,28 @@
     ocrCands.innerHTML = ""; ocrRawWrap.style.display = "none";
     rKind.value = "expense"; applyKind();
     ocrStatus.textContent = "画像を整えています...";
+    $("ocr-local-btn") && ($("ocr-local-btn").style.display = "none");
+    if (window.LifeGemini && LifeGemini.hasKey() && !forceLocalOcr){
+      ocrStatus.textContent = "AIでレシートを読み取っています…（5〜15秒）";
+      try{
+        const r = await LifeGemini.readReceipt(file);
+        if (r.total > 0 && r.total < 1000000){
+          document.getElementById("r-amount").value = r.total;
+          document.getElementById("r-date").value = (r.date && r.date <= ymd(new Date()) && r.date >= ymd(addDays(new Date(), -90))) ? r.date : ymd(new Date());
+          if (r.category && [...document.querySelectorAll("#r-category option")].some(o => o.value === r.category)) document.getElementById("r-category").value = r.category;
+          if (r.store) document.getElementById("r-memo").value = r.store;
+          ocrRaw.textContent = "--- AI読み取り ---\n" + JSON.stringify(r, null, 1); ocrRawWrap.style.display = "block";
+          ocrStatus.textContent = `AIの読み取り：${fmtYen(r.total)}${r.store ? " / " + r.store : ""}${r.category ? " / " + r.category : ""}（下で確認・修正してください）`;
+          const lb = document.getElementById("ocr-local-btn"); if (lb) lb.style.display = "inline-block";
+          formReceipt.style.display = "block";
+          return;
+        }
+        ocrStatus.textContent = "AIが金額を読み取れませんでした。端末内で読み取ります…";
+      }catch(e){
+        ocrStatus.textContent = "AIの読み取りに失敗（" + (e && e.message ? e.message : "不明") + "）。端末内で読み取ります…";
+      }
+    }
+    lastReceiptFile = file;
     try{
       const texts = await ocrPasses(file, msg => { ocrStatus.textContent = msg; });
       const all = texts.join("\n");
