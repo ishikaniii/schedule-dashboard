@@ -458,12 +458,19 @@
              （2026-09-19）。端末側でカメラ/アルバムどちらか選べる。 -->
         <input type="file" id="receipt-file" accept="image/*">
       </div>
-      <button type="button" class="submit budget" id="manual-entry-btn" style="margin-bottom:8px;">写真なしで手入力する</button>
+      <div style="display:flex; gap:8px; margin-bottom:8px; flex-wrap:wrap;">
+        <button type="button" class="submit budget" id="manual-entry-btn" style="flex:1 1 140px;">支出を手入力</button>
+        <button type="button" class="submit budget" id="manual-income-btn" style="flex:1 1 140px;">収入を入力</button>
+      </div>
       <img id="receipt-preview" class="ocr-preview">
       <div class="ocr-status" id="ocr-status"></div>
       <div class="ocr-cands" id="ocr-cands"></div>
       <details id="ocr-raw-wrap" class="ocr-raw-wrap" style="display:none;"><summary>読み取った文字を見る</summary><pre id="ocr-raw"></pre></details>
       <form id="form-receipt" style="display:none;">
+        <div class="field">
+          <label for="r-kind">種別</label>
+          <select id="r-kind"><option value="expense">支出</option><option value="income">収入</option></select>
+        </div>
         <div class="field">
           <label for="r-date">日付</label>
           <input type="date" id="r-date" required>
@@ -473,7 +480,7 @@
             <label for="r-amount">金額(円)</label>
             <input type="number" id="r-amount" min="0" step="1" required>
           </div>
-          <div class="field">
+          <div class="field" id="r-category-field">
             <label for="r-category">カテゴリ</label>
             <select id="r-category">
               <option>食費</option><option>日用品</option><option>交通費</option><option>旅行</option>
@@ -961,7 +968,8 @@
       budgetEl.innerHTML = `
         <div class="budget-nums"><span>使用額</span><span class="now">${fmtYen(spent)}${cap ? " / " + fmtYen(cap) : ""}</span></div>
         <div class="budget-bar"><div class="fill" style="width:${pct}%"></div></div>
-        ${remaining != null ? `<div class="budget-nums"><span>残り</span><span class="now">${fmtYen(remaining)}</span></div>` : ""}
+        ${snap.budget.income != null ? `<div class="budget-nums"><span>収入</span><span class="now">${fmtYen(snap.budget.income)}</span></div>` : ""}
+        ${remaining != null ? `<div class="budget-nums"><span>収支（収入 − 使用額）</span><span class="now" style="${remaining < 0 ? "color:var(--strength);" : ""}">${remaining < 0 ? "−" : "+"}${fmtYen(Math.abs(remaining))}</span></div>` : ""}
         ${catRows ? `<details class="cat-details"><summary>カテゴリ別内訳</summary><div class="cat-list">${catRows}</div></details>` : ""}`;
     } else {
       budgetEl.innerHTML = '<p class="empty">まだ同期されていません。PC側の同期スクリプトの実行を待っています。</p>';
@@ -1920,15 +1928,26 @@
   }
 
   // 写真なしの手入力：フォームをそのまま開く（日付は今日、金額は空）
-  document.getElementById("manual-entry-btn").addEventListener("click", () => {
+  const rKind = document.getElementById("r-kind");
+  function applyKind(){
+    const inc = rKind.value === "income";
+    document.getElementById("r-category-field").style.display = inc ? "none" : "block";
+    document.getElementById("r-memo").placeholder = inc ? "例：バイト代・仕送り・お年玉" : "例：セブンイレブン";
+    document.getElementById("r-submit").textContent = inc ? "収入を記録する" : "記録する";
+  }
+  rKind.addEventListener("change", applyKind);
+  function openManual(kind){
     formReceipt.reset();
+    rKind.value = kind; applyKind();
     document.getElementById("r-date").value = ymd(new Date());
     receiptPreview.style.display = "none"; receiptFile.value = "";
     ocrCands.innerHTML = ""; ocrRawWrap.style.display = "none";
-    ocrStatus.textContent = "金額・カテゴリ・メモを入れて「記録する」を押してください。";
+    ocrStatus.textContent = kind === "income" ? "日付・金額・メモを入れて「収入を記録する」を押してください。" : "金額・カテゴリ・メモを入れて「記録する」を押してください。";
     formReceipt.style.display = "block";
     document.getElementById("r-amount").focus();
-  });
+  }
+  document.getElementById("manual-entry-btn").addEventListener("click", () => openManual("expense"));
+  document.getElementById("manual-income-btn").addEventListener("click", () => openManual("income"));
 
   receiptFile.addEventListener("change", async () => {
     const file = receiptFile.files[0];
@@ -1937,6 +1956,7 @@
     receiptPreview.style.display = "block";
     formReceipt.style.display = "none";
     ocrCands.innerHTML = ""; ocrRawWrap.style.display = "none";
+    rKind.value = "expense"; applyKind();
     ocrStatus.textContent = "画像を整えています...";
     try{
       const texts = await ocrPasses(file, msg => { ocrStatus.textContent = msg; });
@@ -2182,14 +2202,14 @@
       origin: "receipt_scan",
       created_at: createdAt,
       amount: parseInt(document.getElementById("r-amount").value, 10),
-      category: document.getElementById("r-category").value,
+      category: rKind.value === "income" ? "収入" : document.getElementById("r-category").value,
       memo: document.getElementById("r-memo").value.trim(),
       status: "confirmed",
       confirmed_at: new Date().toISOString(),
     });
     if (error){ showBanner("記録に失敗しました: " + error.message); }
     else {
-      formReceipt.reset(); formReceipt.style.display = "none";
+      formReceipt.reset(); rKind.value = "expense"; applyKind(); formReceipt.style.display = "none";
       receiptPreview.style.display = "none"; receiptFile.value = "";
       ocrStatus.textContent = "記録しました。次回の同期でメインの家計簿に反映されます。";
     }
