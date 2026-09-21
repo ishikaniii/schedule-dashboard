@@ -7,7 +7,7 @@
   "use strict";
   const STEPS = [1, 3, 7, 14, 30];
   const STEP_LABEL = ["1日後", "3日後", "1週間後", "2週間後", "1か月後"];
-  const DEFAULT_ARTIFACT = "https://claude.ai/artifact/LdbV9Fb6YyPr99hLQpsDpe";
+  const STUDY_PAGE = "../study/";   // 復習専用ページ（ほかの情報を出さない別ページ）。復習はここで行う
   const FP_AREAS = ["ライフプランニングと資金計画", "リスク管理", "金融資産運用", "タックスプランニング", "不動産", "相続・事業承継"];
 
   const pad = (n) => String(n).padStart(2, "0");
@@ -53,19 +53,13 @@
     root.innerHTML = `
       <div class="card st-card">
         <h2><span class="dot study"></span>学習</h2>
-        <a id="st-open" class="st-open" target="_blank" rel="noopener">復習・知識マップを開く（学習エージェントのページ）</a>
-        <details class="meal-manual"><summary>リンクの設定</summary>
-          <div class="meal-weight"><input type="url" id="st-url" placeholder="ArtifactのURL"><button type="button" id="st-urlsave" class="meal-primary">保存</button></div>
-          <div class="meal-hint">問題・用語・白紙再生の復習は、そのページで行います。ここでは「いつ復習するか」の予定を管理します。</div>
-        </details>
+        <a id="st-open" class="st-open" href="../study/">復習ページを開く（集中して復習する別ページ）</a>
+        <div id="st-cards" class="meal-hint"></div>
+        <div class="meal-hint">復習は、家計・予定・食事などが出ない専用ページで行います（強度を上げて集中するため）。ここでは、学習の時間とFPの進み具合を管理します。</div>
         <div id="st-notice" class="meal-notice" style="display:none;"></div>
       </div>
       <div class="card st-card">
-        <h2>今日の復習<span class="tag" id="st-count"></span></h2>
-        <div id="st-due"></div>
-      </div>
-      <div class="card st-card">
-        <h2>学んだことを記録<span class="tag">復習日が自動で決まります</span></h2>
+        <h2>学習の時間を記録</h2>
         <div class="hb-fields">
           <label>科目・分野<input type="text" id="st-subject" list="st-subjects" placeholder="例：経済学 / FP"></label>
           <label>種類<select id="st-kind"><option>講義</option><option>FP</option><option>読書</option><option>その他</option></select></label>
@@ -73,8 +67,8 @@
         <datalist id="st-subjects"><option>経済学</option><option>FP3級</option>${FP_AREAS.map(a => `<option>FP：${esc(a)}</option>`).join("")}</datalist>
         <label class="hb-l">内容・範囲<input type="text" id="st-title" maxlength="80" placeholder="例：第5回 需要と供給の弾力性／第2章 ライフプラン"></label>
         <label class="hb-l">学習時間(分)<input type="number" id="st-min" min="0" step="5" placeholder="例 30"></label>
-        <button type="button" id="st-add" class="meal-primary">記録して、復習日を作る</button>
-        <div class="meal-hint">復習日：1日後→3日後→1週間後→2週間後→1か月後。見返す前に、まず思い出して書き出してから確認すると、記憶に残ります。</div>
+        <button type="button" id="st-add" class="meal-primary">記録する</button>
+        <div class="meal-hint">復習のカードは、学習エージェントが講義やノートから自動で作り、復習ページに並びます（間隔：1日後→3日後→1週間後→2週間後→1か月後）。</div>
       </div>
       <div class="card st-card">
         <h2>FP3級の進み具合</h2>
@@ -83,7 +77,6 @@
         <div id="fp-areas"></div>
         <div class="meal-hint">学習時間は、上で種類を「FP」にして記録した分から集計します。3級の目安は80〜150時間です。</div>
       </div>
-      <div class="card st-card"><h2>これからの復習予定</h2><div id="st-upcoming"></div></div>
       <div class="card st-card"><h2>学習の記録</h2><ul class="list" id="st-list"></ul></div>`;
     const $ = (id) => root.querySelector("#" + id);
 
@@ -91,24 +84,22 @@
     const nextStep = (it) => { for (let i = 0; i < STEPS.length; i++) if (!(it.done_steps || []).includes(i)) return i; return -1; };
 
     function render() {
-      const url = ls.get("lb_artifact_url", DEFAULT_ARTIFACT); $("st-open").href = url; $("st-url").value = url;
       const nt = $("st-notice");
       if (useLocal) { nt.style.display = "block"; nt.innerHTML = "いまは、この端末だけに保存しています。共有するには、Supabaseで schema.sql の <b>study_items</b> のSQLを実行してください。"; } else nt.style.display = "none";
 
-      const due = [], upcoming = [];
-      items.forEach(it => { const i = nextStep(it); if (i < 0) return; const d = stepDate(it, i); (d <= today ? due : upcoming).push({ it, i, d }); });
-      due.sort((a, b) => a.d.localeCompare(b.d)); upcoming.sort((a, b) => a.d.localeCompare(b.d));
-      $("st-count").textContent = due.length ? `${due.length}件` : "";
-      $("st-due").innerHTML = due.length ? due.map(({ it, i, d }) => {
-        const late = Math.round((parse(today) - parse(d)) / 86400000);
-        return `<div class="st-row"><div><b>${esc(it.subject)}</b> ${esc(it.title)}<small>${STEP_LABEL[i]}の復習（${it.date.slice(5)}の学習）${late > 0 ? `<span class="st-late">${late}日遅れ</span>` : ""}</small></div>
-          <button type="button" class="st-done" data-id="${esc(String(it.id))}" data-step="${i}">復習した</button></div>`; }).join("")
-        : '<div class="meal-hint">今日の復習はありません。</div>';
-      $("st-due").querySelectorAll(".st-done").forEach(b => b.addEventListener("click", () => markDone(b.dataset.id, +b.dataset.step)));
-      $("st-upcoming").innerHTML = upcoming.length ? upcoming.slice(0, 8).map(({ it, i, d }) => `<div class="st-row"><div>${d.slice(5)}　<b>${esc(it.subject)}</b> ${esc(it.title)}<small>${STEP_LABEL[i]}</small></div></div>`).join("") : '<div class="meal-hint">予定はありません。</div>';
+      cardCounts();
       $("st-list").innerHTML = items.slice(0, 15).map(it => `<li class="row"><span class="date mono">${String(it.date).slice(5)}</span><span class="desc">${esc(it.subject)}｜${esc(it.title)}${it.minutes ? `（${it.minutes}分）` : ""}<small class="st-prog"> 復習 ${(it.done_steps || []).length}/${STEPS.length}</small></span><button class="del" data-id="${esc(String(it.id))}">×</button></li>`).join("") || '<li class="empty">まだ記録がありません。</li>';
       $("st-list").querySelectorAll(".del").forEach(b => b.addEventListener("click", () => removeItem(b.dataset.id)));
       fpRender();
+    }
+
+    async function cardCounts(){
+      const el = $("st-cards"); if (!el) return;
+      const t = ymd(new Date()), tm = ymd(addDays(new Date(), 1));
+      const q = (f) => f(sb.from("study_cards").select("id", { count: "exact", head: true }));
+      const [d, n, all] = await Promise.all([q(x => x.lte("next_review", t)), q(x => x.eq("next_review", tm)), q(x => x)]);
+      if (d.error){ el.textContent = "復習カードは、まだ準備ができていません（Supabaseで schema.sql の「学習」のSQLを実行してください）。"; return; }
+      el.innerHTML = `今日の復習：<b>${d.count || 0}枚</b>　明日：${n.count || 0}枚　カード総数：${all.count || 0}枚`;
     }
 
     // ---------- FP ----------
@@ -126,7 +117,6 @@
     const fpSave = () => { const g = fpLoad(); g.date = $("fp-date").value; g.target = parseInt($("fp-target").value, 10) || 100; ls.set("lb_fp", JSON.stringify(g)); fpRender(); };
     $("fp-date").addEventListener("change", fpSave); $("fp-target").addEventListener("change", fpSave);
 
-    $("st-urlsave").addEventListener("click", () => { const v = $("st-url").value.trim(); if (/^https:\/\//.test(v)) { ls.set("lb_artifact_url", v); render(); } });
     $("st-add").addEventListener("click", () => {
       const subject = $("st-subject").value.trim(), title = $("st-title").value.trim(); if (!subject || !title) return;
       addItem({ date: today, subject, title, kind: $("st-kind").value, minutes: $("st-min").value ? parseInt($("st-min").value, 10) : null, done_steps: [] });

@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>復習</title>
+<style>
+  /* 復習専用ページ：ほかの情報（家計・予定・食事など）を一切出さず、カードだけに集中できるようにする */
+  :root{ --bg:#f4f3ef; --card:#ffffff; --ink:#1d1f24; --dim:#6a6f79; --line:#dcdad2; --accent:#3f5bd6; --ok:#2f8f4f; --warn:#c98a1a; --ng:#c0453a; }
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ --bg:#15171b; --card:#1e2127; --ink:#eceef2; --dim:#9aa1ad; --line:#2d323b; --accent:#8ea2ff; --ok:#5fd382; --warn:#e0b13d; --ng:#ef7d72; } }
+  *{ box-sizing:border-box; } html,body{ margin:0; background:var(--bg); color:var(--ink); }
+  body{ font-family:"Noto Sans JP","Hiragino Sans","Yu Gothic UI",system-ui,sans-serif; line-height:1.7; min-height:100vh; padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom); }
+  .wrap{ max-width:720px; margin:0 auto; padding:18px 18px 60px; }
+  header{ display:flex; align-items:baseline; justify-content:space-between; margin-bottom:18px; }
+  h1{ font-size:18px; letter-spacing:.06em; margin:0; font-weight:600; }
+  .back{ font-size:11px; color:var(--dim); text-decoration:none; opacity:.7; }
+  .tabs{ display:flex; gap:6px; margin-bottom:16px; } .tabs button{ flex:1; border:1px solid var(--line); background:transparent; color:var(--dim); border-radius:8px; padding:8px; font-size:14px; cursor:pointer; }
+  .tabs button.active{ background:var(--ink); color:var(--bg); border-color:var(--ink); }
+  .card{ background:var(--card); border:1px solid var(--line); border-radius:14px; padding:22px 20px; }
+  .meta{ font-size:12px; color:var(--dim); margin-bottom:10px; display:flex; gap:10px; flex-wrap:wrap; }
+  .q{ font-size:19px; line-height:1.75; white-space:pre-wrap; margin:6px 0 16px; }
+  textarea{ width:100%; min-height:110px; border:1px solid var(--line); border-radius:10px; padding:12px; font:inherit; font-size:15px; background:var(--bg); color:var(--ink); resize:vertical; }
+  .row{ display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; }
+  button.b{ border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:10px; padding:11px 16px; font-size:15px; cursor:pointer; flex:1; min-width:120px; }
+  button.primary{ background:var(--accent); border-color:var(--accent); color:#fff; }
+  button.ok{ background:var(--ok); border-color:var(--ok); color:#fff; } button.mid{ background:var(--warn); border-color:var(--warn); color:#fff; } button.ng{ background:var(--ng); border-color:var(--ng); color:#fff; }
+  .ans{ margin-top:16px; padding-top:14px; border-top:1px dashed var(--line); } .ans h3{ font-size:12px; color:var(--dim); margin:12px 0 4px; font-weight:600; letter-spacing:.05em; }
+  .ans div{ white-space:pre-wrap; font-size:15.5px; }
+  .ai{ background:var(--bg); border-radius:10px; padding:12px; font-size:14px; margin-top:12px; } .ai b{ color:var(--accent); }
+  .progress{ height:4px; background:var(--line); border-radius:99px; margin-bottom:14px; overflow:hidden; } .progress i{ display:block; height:100%; background:var(--accent); width:0; transition:width .3s; }
+  .center{ text-align:center; padding:30px 10px; } .big{ font-size:22px; font-weight:600; margin-bottom:8px; }
+  .note{ border:1px solid var(--line); background:var(--card); border-radius:12px; padding:12px 14px; margin-bottom:10px; } .note summary{ cursor:pointer; font-weight:600; }
+  .note p, .note li{ font-size:14.5px; } .note .sub{ font-size:12px; color:var(--dim); font-weight:400; }
+  .subj{ display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; } .subj button{ border:1px solid var(--line); background:transparent; color:var(--dim); border-radius:99px; padding:4px 12px; font-size:12.5px; cursor:pointer; } .subj button.active{ background:var(--accent); color:#fff; border-color:var(--accent); }
+  .setup{ background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; font-size:14px; }
+  #gate{ position:fixed; inset:0; background:var(--bg); display:flex; align-items:center; justify-content:center; z-index:9; }
+  #gate .box{ background:var(--card); border:1px solid var(--line); border-radius:14px; padding:24px; width:min(320px,88vw); } #gate input{ width:100%; padding:10px; border:1px solid var(--line); border-radius:8px; font-size:16px; background:var(--bg); color:var(--ink); margin:10px 0; } #gate button{ width:100%; padding:10px; border:0; border-radius:8px; background:var(--accent); color:#fff; font-size:15px; } #gate .err{ color:var(--ng); font-size:12.5px; min-height:1.2em; margin-top:6px; }
+</style>
+</head>
+<body>
+<div id="gate"><div class="box"><h1>復習</h1><p style="color:var(--dim);font-size:13px;margin:6px 0 0;">パスコードを入力してください</p><input type="password" id="gate-input" autocomplete="off"><button id="gate-submit">入る</button><div class="err" id="gate-err"></div></div></div>
+<div class="wrap" id="app" style="display:none;">
+  <header><h1>復習<span id="due-label" style="font-weight:400;color:var(--dim);font-size:13px;margin-left:10px;"></span></h1><a class="back" href="../app/">LifeBaseへ戻る</a></header>
+  <div class="tabs"><button id="tab-review" class="active">今日の復習</button><button id="tab-notes">ノート</button></div>
+  <div id="view"></div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+(function(){
+  "use strict";
+  const SUPABASE_URL = "https://wjdfpoawlnksvieztsyq.supabase.co", SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndqZGZwb2F3bG5rc3ZpZXp0c3lxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk3NTU2MzAsImV4cCI6MjEwNTMzMTYzMH0.aC6B74fkt5l9iC1y57RuJ834Claluc0phwJ3Fyk-S50";
+  const PASSCODE_HASH_HEX = "d953f2f2ae6d9853c5a03fbd45e167f4e5e65de669ff7d12d6d170efa8e8cb0a", AUTH_STORAGE_KEY = "sk_app_auth_ok";   // LifeBaseと同じパスコード・同じ保存キー（一度入れば共通）
+  const STEPS = [1, 3, 7, 14, 30];
+  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => (s == null ? "" : String(s)).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+  const pad = (n) => String(n).padStart(2, "0"), ymd = (d) => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+  const today = ymd(new Date());
+  const KIND = { quiz: "確認問題", calculation: "計算問題", glossary: "用語", blank_recall: "白紙再生" };
+
+  async function sha256Hex(t){ const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(t)); return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2,"0")).join(""); }
+  function openApp(){ $("gate").style.display = "none"; $("app").style.display = "block"; init(); }
+  async function tryUnlock(){ const h = await sha256Hex($("gate-input").value.trim()); if (h === PASSCODE_HASH_HEX){ try{ localStorage.setItem(AUTH_STORAGE_KEY, h); }catch(e){} openApp(); } else { $("gate-err").textContent = "パスコードが違います"; $("gate-input").value = ""; } }
+  $("gate-submit").addEventListener("click", tryUnlock); $("gate-input").addEventListener("keydown", e => { if (e.key === "Enter") tryUnlock(); });
+  try{ if (localStorage.getItem(AUTH_STORAGE_KEY) === PASSCODE_HASH_HEX) openApp(); }catch(e){}
+
+  // ---------- Gemini（任意：答えの採点）。キーはLifeBaseと共通（この端末のlocalStorage） ----------
+  const gKey = () => { try{ return localStorage.getItem("lb_gemini_key") || ""; }catch(e){ return ""; } };
+  async function gModel(key){
+    let m = ""; try{ m = localStorage.getItem("lb_gemini_model") || ""; }catch(e){}
+    if (m) return m;
+    const r = await fetch("https://generativelanguage.googleapis.com/v1beta/models?key=" + encodeURIComponent(key) + "&pageSize=200"); if (!r.ok) throw new Error("models " + r.status);
+    const d = await r.json();
+    const names = (d.models || []).filter(x => (x.supportedGenerationMethods || []).includes("generateContent") && /flash/i.test(x.name) && !/lite|preview|exp|thinking|tts|image|live|audio/i.test(x.name)).map(x => x.name.replace(/^models\//, ""));
+    names.sort().reverse(); m = names[0] || "gemini-2.0-flash"; try{ localStorage.setItem("lb_gemini_model", m); }catch(e){} return m;
+  }
+  async function aiGrade(card, mine){
+    const key = gKey(); const model = await gModel(key);
+    const prompt = `あなたは学習の採点者です。次の問題に対する学習者の答えを、模範情報と比べて採点し、JSONだけを返してください。\n` +
+      `形式：{"covered":["書けていた点"],"missed":["抜けていた点・間違い"],"comment":"一言のアドバイス","rating":"ok|mid|ng"}\n` +
+      `rating：ほぼ合っていれば ok、部分的なら mid、大きく抜け・誤りがあれば ng。模範情報に無いことは断定せず、抜けを厳しくしすぎないでください。\n` +
+      `【問題】${card.question}\n【模範情報】${card.answer}${card.approach ? "\n【考え方】" + card.approach : ""}\n【学習者の答え】${mine || "（無回答）"}`;
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`, { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.2, responseMimeType: "application/json" } }) });
+    if (r.status === 429) throw new Error("無料枠の上限です"); if (!r.ok) throw new Error("採点できませんでした（" + r.status + "）");
+    const d = await r.json(); const t = (((d.candidates || [])[0] || {}).content || {}).parts; const txt = t ? t.map(p => p.text || "").join("") : "";
+    return JSON.parse(txt.replace(/^\s*```(?:json)?/i, "").replace(/```\s*$/, "").trim());
+  }
+
+  // ---------- 復習セッション ----------
+  let queue = [], idx = 0, stats = { ok: 0, mid: 0, ng: 0 }, missing = false, aiText = null, startTotal = 0;
+  async function loadDue(){
+    const { data, error } = await sb.from("study_cards").select("*").lte("next_review", today).order("next_review", { ascending: true }).limit(60);
+    if (error){ missing = /study_cards|relation|schema cache/i.test(error.message || ""); queue = []; return; }
+    missing = false; queue = (data || []).sort(() => Math.random() - 0.5); startTotal = queue.length; idx = 0;
+  }
+  async function dueTomorrow(){ const { count } = await sb.from("study_cards").select("id", { count: "exact", head: true }).eq("next_review", ymd(addDays(new Date(), 1))); return count || 0; }
+  function view(html){ $("view").innerHTML = html; }
+  function renderReview(){
+    $("due-label").textContent = queue.length ? `${Math.min(idx + 1, queue.length)} / ${queue.length}` : "";
+    if (missing){ view(`<div class="setup"><b>まだ準備ができていません。</b><br>Supabaseで schema.sql の「学習」（study_cards / study_entries）のSQLを実行してください。</div>`); return; }
+    if (!queue.length || idx >= queue.length){
+      dueTomorrow().then(n => view(`<div class="card center"><div class="big">${startTotal ? "今日の復習は終了です" : "今日の復習はありません"}</div>
+        ${startTotal ? `<div style="color:var(--dim)">できた ${stats.ok}／あいまい ${stats.mid}／できなかった ${stats.ng}</div>` : ""}<div style="color:var(--dim);margin-top:10px;">明日の復習：${n}枚</div></div>`));
+      return;
+    }
+    const c = queue[idx]; aiText = null;
+    view(`<div class="progress"><i style="width:${Math.round(idx / queue.length * 100)}%"></i></div>
+      <div class="card"><div class="meta"><span>${esc(c.subject)}</span><span>${esc(c.entry_title || "")}</span><span>${KIND[c.kind === "practice" ? (c.type || "quiz") : c.kind] || ""}</span></div>
+        <div class="q">${esc(c.question)}</div>
+        <textarea id="mine" placeholder="見返さずに、まず自分の言葉で書く（書かずに頭の中で答えてもOK）"></textarea>
+        <div class="row"><button class="b primary" id="show">答えを見る</button>${gKey() ? `<button class="b" id="grade">AIで採点して見る</button>` : ""}</div>
+        <div id="after"></div></div>`);
+    $("show").addEventListener("click", () => reveal(c, false)); if ($("grade")) $("grade").addEventListener("click", () => reveal(c, true));
+  }
+  async function reveal(c, withAI){
+    const mine = $("mine").value.trim(); $("show").disabled = true; if ($("grade")) $("grade").disabled = true;
+    let ai = ""; let suggested = null;
+    if (withAI){ $("after").innerHTML = '<div class="ai">採点しています…</div>';
+      try{ const g = await aiGrade(c, mine); suggested = g.rating;
+        ai = `<div class="ai"><b>AIの採点（参考）</b><br>書けていた点：${esc((g.covered || []).join("／") || "なし")}<br>抜け・誤り：${esc((g.missed || []).join("／") || "なし")}<br>${esc(g.comment || "")}</div>`;
+      }catch(e){ ai = `<div class="ai">AI採点は使えませんでした（${esc(e.message)}）。自分で判断してください。</div>`; } }
+    $("after").innerHTML = `<div class="ans"><h3>答え</h3><div>${esc(c.answer)}</div>${c.approach ? `<h3>考え方</h3><div>${esc(c.approach)}</div>` : ""}</div>${ai}
+      <div class="row"><button class="b ng" data-r="ng">できなかった</button><button class="b mid" data-r="mid">あいまい</button><button class="b ok" data-r="ok">できた</button></div>` ;
+    $("after").querySelectorAll("[data-r]").forEach(b => b.addEventListener("click", () => rate(c, b.dataset.r)));
+    if (suggested){ const sb2 = $("after").querySelector(`[data-r="${suggested}"]`); if (sb2) sb2.style.outline = "3px solid var(--accent)"; }
+  }
+  async function rate(c, r){
+    let step = c.step || 0, next;
+    if (r === "ok"){ step = Math.min(step + 1, STEPS.length - 1); next = ymd(addDays(new Date(), STEPS[step])); }
+    else if (r === "mid"){ next = ymd(addDays(new Date(), Math.max(1, Math.floor(STEPS[step] / 2)))); }
+    else { step = 0; next = ymd(addDays(new Date(), 1)); }
+    stats[r]++;
+    await sb.from("study_cards").update({ step, next_review: next, last_reviewed: today, reps: (c.reps || 0) + 1, lapses: (c.lapses || 0) + (r === "ng" ? 1 : 0) }).eq("id", c.id);
+    idx++; renderReview();
+  }
+
+  // ---------- ノート ----------
+  let subj = "all";
+  async function renderNotes(){
+    $("due-label").textContent = "";
+    const { data, error } = await sb.from("study_entries").select("*").order("date", { ascending: false }).limit(100);
+    if (error){ view(`<div class="setup">ノートを読み込めませんでした。schema.sql の「学習」のSQLを実行してください。</div>`); return; }
+    const subs = [...new Set((data || []).map(x => x.subject))];
+    const rows = (data || []).filter(x => subj === "all" || x.subject === subj);
+    view(`<div class="subj"><button data-s="all" class="${subj === "all" ? "active" : ""}">すべて</button>${subs.map(s => `<button data-s="${esc(s)}" class="${subj === s ? "active" : ""}">${esc(s)}</button>`).join("")}</div>` +
+      (rows.map(e => `<details class="note"><summary>${esc(e.title)} <span class="sub">${esc(e.subject)}・${esc(e.date)}</span></summary>
+        <p>${esc(e.summary || "").replace(/\n/g, "<br>")}</p>${e.connection_note ? `<p class="sub">前回とのつながり：${esc(e.connection_note)}</p>` : ""}
+        ${(e.glossary || []).length ? `<details><summary class="sub">用語（${e.glossary.length}）</summary><ul>${e.glossary.map(g => `<li><b>${esc(g.term)}</b>：${esc(g.explanation)}</li>`).join("")}</ul></details>` : ""}</details>`).join("") || '<div class="setup">まだノートがありません。</div>'));
+    $("view").querySelectorAll(".subj button").forEach(b => b.addEventListener("click", () => { subj = b.dataset.s; renderNotes(); }));
+  }
+
+  async function init(){
+    $("tab-review").addEventListener("click", () => { $("tab-review").classList.add("active"); $("tab-notes").classList.remove("active"); renderReview(); });
+    $("tab-notes").addEventListener("click", () => { $("tab-notes").classList.add("active"); $("tab-review").classList.remove("active"); renderNotes(); });
+    view('<div class="center" style="color:var(--dim)">読み込み中…</div>');
+    await loadDue(); renderReview();
+  }
+})();
+</script>
+</body>
+</html>
