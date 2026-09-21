@@ -212,6 +212,12 @@
   .reco .reco-alt{ margin-top:8px; font-size:12px; color:var(--ink-dim); }
   .reco .reco-alt button{ border:1px solid var(--border); background:var(--surface); color:var(--ink-dim); border-radius:6px; padding:2px 8px; font-size:12px; cursor:pointer; margin-left:4px; }
   .form-guide{ border:1px solid var(--border); border-radius:10px; padding:8px 12px; margin:0 0 12px; font-size:13px; line-height:1.6; }
+  .form-anim{ width:100%; height:260px; border-radius:10px; background:var(--surface-2); margin-top:8px; overflow:hidden; }
+  .form-anim canvas{ display:block; margin:0 auto; }
+  .form-anim-cap{ display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap; font-size:12px; margin:4px 2px 0; }
+  .form-anim-cap #form-anim-label{ color:var(--strength); font-weight:600; }
+  .form-anim-cap .fa-hint{ color:var(--ink-dim); }
+  .fg-video{ display:inline-block; margin-top:10px; padding:6px 12px; border:1px solid var(--border); border-radius:999px; font-size:12.5px; color:var(--ink); text-decoration:none; background:var(--surface-2); }
   .form-guide summary{ cursor:pointer; font-weight:600; }
   .form-guide dl{ margin:8px 0 0; } .form-guide dt{ font-size:11.5px; color:var(--strength); font-weight:600; margin-top:8px; letter-spacing:.03em; }
   .form-guide dd{ margin:2px 0 0; }
@@ -371,6 +377,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="body3d.js"></script>
 <script src="form_guide.js"></script>
+<script src="form_anim.js"></script>
 </head>
 <body>
 
@@ -714,7 +721,12 @@
           <div class="last-hint" id="s-last-hint"></div>
           <details class="form-guide" id="form-guide" style="display:none;" open>
             <summary>正しいフォームのコツ</summary>
+            <div id="form-anim-wrap" style="display:none;">
+              <div id="form-anim" class="form-anim"></div>
+              <div class="form-anim-cap"><span id="form-anim-label"></span><span class="fa-hint">ドラッグで回転（棒人間の簡易アニメ）</span></div>
+            </div>
             <div id="form-guide-body"></div>
+            <a id="form-video" class="fg-video" target="_blank" rel="noopener">▶ 動画で見る（YouTubeで検索）</a>
           </details>
           <div class="row3">
             <div class="field"><label for="s-weight">重量(kg)</label><input type="number" id="s-weight" step="0.5" min="0" required></div>
@@ -2521,7 +2533,20 @@
       <ul>${(window.FORM_COMMON || []).map(t => `<li>${escapeHtml(t)}</li>`).join("")}</ul>
     </div>`;
     box.style.display = "block";
+    // 実際の動画（YouTube検索）へのリンクは全種目に付ける
+    document.getElementById("form-video").href = "https://www.youtube.com/results?search_query=" + encodeURIComponent(name + " やり方 フォーム");
+    // 簡易3Dアニメ（主な種目のみ）。使わない場合は ANIM_ENABLED を false にすればリンクだけになる。
+    const wrap = document.getElementById("form-anim-wrap");
+    if (ANIM_ENABLED && window.FormAnim && FormAnim.has(name)){
+      wrap.style.display = "block";
+      const lab = document.getElementById("form-anim-label");
+      FormAnim.show(document.getElementById("form-anim"), name, { label: (t) => { if (lab.textContent !== t) lab.textContent = t; } });
+    } else {
+      wrap.style.display = "none";
+      if (window.FormAnim) FormAnim.hide();
+    }
   }
+  const ANIM_ENABLED = true;
 
   // ---- 今日のおすすめメニュー ----
   // 考え方：①直近7日のセット数が一番少ない部位を優先（偏りをならす）、
