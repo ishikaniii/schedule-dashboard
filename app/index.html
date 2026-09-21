@@ -263,6 +263,14 @@
   .meal-weight{ display:flex; gap:8px; } .meal-weight input{ flex:1; min-width:0; }
   .meal-week table{ width:100%; border-collapse:collapse; font-size:12.5px; } .meal-week th, .meal-week td{ text-align:right; padding:5px 6px; border-bottom:1px solid var(--border); }
   .meal-week th:first-child, .meal-week td:first-child{ text-align:left; } .meal-week td.ok{ color:var(--shift); font-weight:600; } .meal-week td.ng{ color:var(--strength); }
+  .meal-search input, .meal-weight input[type=password]{ width:100%; min-width:0; }
+  .meal-results{ display:flex; flex-direction:column; gap:6px; margin:8px 0; }
+  .meal-res{ text-align:left; border:1px solid var(--border); background:var(--surface); color:var(--ink); border-radius:10px; padding:7px 10px; font-size:13px; cursor:pointer; }
+  .meal-res.off{ border-style:dashed; } .meal-res small{ display:block; font-size:11px; color:var(--ink-dim); } .meal-res em{ font-style:normal; font-size:11px; color:var(--ink-dim); margin-left:6px; }
+  .meal-photo{ display:flex; align-items:center; gap:10px; margin:10px 0 4px; flex-wrap:wrap; }
+  .meal-photo-btn{ display:inline-block; border:1px solid #c9772b; color:#c9772b; border-radius:999px; padding:7px 16px; font-size:13px; cursor:pointer; }
+  .mp-row{ border:1px solid var(--border); border-radius:10px; padding:8px 10px; margin:6px 0; font-size:13px; } .mp-row small{ color:var(--ink-dim); }
+  .mp-nums{ display:flex; gap:4px; align-items:center; flex-wrap:wrap; margin-top:6px; } .mp-nums input{ width:4.6em; } .mp-nums span{ font-size:11px; color:var(--ink-dim); margin-right:6px; }
   .credit{ font-size:10.5px; color:var(--ink-dim); line-height:1.5; margin:18px 4px 4px; }
   .credit a{ color:var(--ink-dim); }
   .body-hint{ font-size:10.5px; color:var(--ink-dim); text-align:center; line-height:1.3; }

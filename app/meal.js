@@ -47,6 +47,52 @@
     ["学食 小鉢（納豆・冷奴）", "1鉢", 70, 5, 3, 3, 80, "学食"],
     ["学食 唐揚げ", "3個", 300, 15, 18, 12, 150, "学食"],
   ];
+
+  // 検索用の追加辞書（外食・定番料理など、1食分の目安）：[名前, 1食分, kcal, P, F, C, 価格の目安, 検索キーワード]
+  // 商品名の検索は Open Food Facts（無料の公開データ）にも問い合わせる。どれも「大体の値」。
+  const DISHES = [
+    ["カレーライス", "1皿", 750, 20, 20, 120, 500, "カレー"],
+    ["牛丼（並）", "1杯", 650, 20, 20, 95, 400, "ぎゅうどん 吉野家 すき家 松屋"],
+    ["親子丼", "1杯", 700, 30, 17, 110, 450, "おやこどん 丼"],
+    ["カツ丼", "1杯", 900, 32, 28, 110, 550, "かつどん 丼"],
+    ["天丼", "1杯", 750, 20, 20, 115, 550, "てんどん 丼"],
+    ["鶏の唐揚げ定食", "1食", 950, 35, 35, 110, 650, "からあげ 定食 唐揚げ"],
+    ["焼き魚定食", "1食", 650, 30, 15, 95, 650, "さば 鮭 焼魚 定食"],
+    ["生姜焼き定食", "1食", 850, 30, 30, 100, 650, "しょうが焼き 豚 定食"],
+    ["ラーメン（醤油）", "1杯", 500, 20, 15, 70, 700, "らーめん 中華そば"],
+    ["ラーメン（豚骨）", "1杯", 600, 22, 22, 75, 800, "とんこつ らーめん"],
+    ["うどん（かけ）", "1杯", 340, 9, 2, 70, 350, "かけうどん"],
+    ["きつねうどん", "1杯", 420, 13, 8, 72, 400, "うどん"],
+    ["ざるそば", "1枚", 300, 11, 2, 60, 500, "そば 蕎麦"],
+    ["ナポリタン", "1皿", 650, 17, 20, 95, 700, "パスタ スパゲティ"],
+    ["ミートソースパスタ", "1皿", 700, 25, 20, 100, 800, "パスタ スパゲティ ミート"],
+    ["ハンバーグ", "1個", 250, 15, 17, 8, 150, "ハンバーグ"],
+    ["餃子", "6個", 300, 12, 15, 28, 250, "ギョーザ ぎょうざ"],
+    ["チャーハン", "1皿", 700, 16, 22, 105, 600, "炒飯 焼き飯"],
+    ["オムライス", "1皿", 750, 22, 27, 100, 700, "オムライス"],
+    ["ハンバーガー", "1個", 300, 15, 12, 33, 200, "バーガー マック"],
+    ["ピザ", "1切れ", 250, 10, 9, 30, 200, "ピザ"],
+    ["フライドポテト（M）", "1個", 400, 5, 20, 50, 250, "ポテト"],
+    ["サンドイッチ（ミックス）", "1パック", 350, 12, 18, 35, 300, "サンド"],
+    ["味噌汁", "1杯", 40, 3, 1.3, 4, 30, "みそしる"],
+    ["焼き鳥（もも・タレ）", "1本", 90, 6, 5, 4, 100, "やきとり"],
+    ["刺身（盛り合わせ）", "1人前", 200, 30, 6, 2, 600, "さしみ 魚"],
+    ["冷奴", "1丁150g", 108, 9.9, 6.3, 2.4, 45, "豆腐 ひややっこ"],
+    ["サラダ（ドレッシング付）", "1皿", 80, 2, 5, 8, 250, "野菜"],
+    ["おでん（大根・卵など3品）", "1人前", 150, 10, 6, 12, 300, "おでん"],
+    ["缶コーヒー（加糖）", "1缶", 60, 1, 1, 12, 130, "コーヒー"],
+    ["スポーツドリンク", "500ml", 100, 0, 0, 25, 150, "ポカリ アクエリ"],
+    ["コーラ", "500ml", 225, 0, 0, 56, 160, "ジュース 炭酸"],
+    ["チョコレート", "1/2板25g", 140, 2, 8, 15, 60, "ちょこ お菓子"],
+    ["ポテトチップス", "1/3袋", 180, 2, 11, 18, 60, "スナック お菓子"],
+    ["アイスクリーム", "1個", 200, 3, 10, 24, 150, "アイス"],
+    ["メロンパン", "1個", 400, 7, 12, 65, 150, "パン"],
+    ["カレーパン", "1個", 350, 7, 20, 35, 150, "パン"],
+    ["おにぎり（梅）", "1個", 170, 4, 0.5, 38, 120, "おむすび"],
+    ["おにぎり（明太子）", "1個", 175, 5, 0.6, 38, 130, "おむすび"],
+    ["幕の内弁当", "1個", 750, 25, 20, 110, 550, "弁当"],
+    ["ミルクティー", "500ml", 150, 2, 3, 28, 150, "紅茶"],
+  ];
   const DEFAULT_TARGET = { kcal: 2600, p: 125, f: 70, c: 365, kg: 65, mode: "gain" };
   const MEALS = ["朝", "昼", "夜", "間食"];
 
@@ -101,12 +147,27 @@
           <label>食事<select id="meal-type">${MEALS.map(m => `<option>${m}</option>`).join("")}</select></label>
           <label>量<select id="meal-mult"><option value="0.5">×0.5</option><option value="1" selected>×1</option><option value="1.5">×1.5</option><option value="2">×2</option><option value="3">×3</option></select></label>
         </div>
+        <div class="meal-search">
+          <input type="search" id="ms-q" placeholder="食品名で検索して自動入力（例：牛丼、カレー、サラダチキン）">
+          <div id="ms-res" class="meal-results"></div>
+        </div>
+        <div class="meal-photo">
+          <label class="meal-photo-btn">写真から入力<input type="file" id="mp-file" accept="image/*" hidden></label>
+          <span id="mp-status" class="meal-hint"></span>
+        </div>
+        <div id="mp-result"></div>
+        <details class="meal-manual" id="mp-settings"><summary>写真認識の設定（無料のGemini APIキー）</summary>
+          <div class="meal-hint">写真の認識には、Googleの無料枠のAI（Gemini）を使います。<a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">Google AI Studio</a> でAPIキーを作成（無料・クレジットカード不要）して、下に貼り付けてください。キーはこの端末のブラウザにだけ保存され、アプリのコードやGitHubには入りません。写真はGoogleに送信されます（無料枠では入力内容がGoogleのサービス改善に使われる場合があります）。<b>他人が写る写真や個人情報が写る写真は送らないでください。</b></div>
+          <div class="meal-weight"><input type="password" id="mp-key" placeholder="APIキー（AIza…）" autocomplete="off"><button type="button" id="mp-keysave" class="meal-primary">保存</button></div>
+          <div class="meal-hint" id="mp-keystate"></div>
+        </details>
         <div id="meal-recent" class="meal-chips"></div>
         <div class="meal-cats" id="meal-cats"></div>
         <div id="meal-foods" class="meal-chips"></div>
         <details class="meal-manual"><summary>手入力で追加（表示にない物・商品ラベルの値）</summary>
           <form id="meal-form" class="meal-target-form">
             <label>名前<input type="text" id="mf-name" required maxlength="60"></label>
+            <label>量(g・任意)<input type="number" id="mf-grams" step="1" min="1" placeholder="検索した商品用"></label>
             <label>kcal<input type="number" id="mf-kcal" step="1" min="0" required></label>
             <label>たんぱく質g<input type="number" id="mf-p" step="0.1" min="0" value="0"></label>
             <label>脂質g<input type="number" id="mf-f" step="0.1" min="0" value="0"></label>
@@ -241,6 +302,136 @@
       if (ok) fetchAll();
     }
 
+
+    // ---------------- 検索（辞書＋Open Food Facts） ----------------
+    let scale = null;            // 100gあたりの栄養（Open Food Facts）→ 量(g)から計算
+    const openManual = () => { const d = root.querySelector(".meal-manual:has(#meal-form)") || $("meal-form").closest("details"); if (d) d.open = true; };
+    function fillForm(name, kcal, p, f, c, price, grams) {
+      openManual();
+      $("mf-name").value = name; $("mf-kcal").value = Math.round(kcal); $("mf-p").value = r1(p); $("mf-f").value = r1(f); $("mf-c").value = r1(c);
+      $("mf-price").value = price || ""; $("mf-grams").value = grams || "";
+      $("meal-form").scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+    $("mf-grams").addEventListener("input", () => {
+      if (!scale) return; const g = parseFloat($("mf-grams").value) || 0;
+      $("mf-kcal").value = Math.round(scale.kcal * g / 100); $("mf-p").value = r1(scale.p * g / 100); $("mf-f").value = r1(scale.f * g / 100); $("mf-c").value = r1(scale.c * g / 100);
+    });
+    const norm = (s) => String(s || "").toLowerCase().replace(/[\s　（）()・]/g, "");
+    let searchSeq = 0, searchTimer = null;
+    function localHits(q) {
+      const nq = norm(q);
+      const all = FOODS.map(f => ({ name: f[0], serving: f[1], kcal: f[2], p: f[3], f: f[4], c: f[5], price: f[6], key: "" }))
+        .concat(DISHES.map(d => ({ name: d[0], serving: d[1], kcal: d[2], p: d[3], f: d[4], c: d[5], price: d[6], key: d[7] })));
+      return all.filter(x => norm(x.name).includes(nq) || norm(x.key).includes(nq)).slice(0, 8);
+    }
+    async function offHits(q, seq) {
+      const url = "https://jp.openfoodfacts.org/cgi/search.pl?" + new URLSearchParams({ search_terms: q, search_simple: 1, action: "process", json: 1, page_size: 8, fields: "product_name,brands,nutriments,serving_size" });
+      const ctl = new AbortController(); const to = setTimeout(() => ctl.abort(), 9000);
+      try {
+        const r = await fetch(url, { signal: ctl.signal }); if (!r.ok) throw new Error(r.status);
+        const d = await r.json(); if (seq !== searchSeq) return null;
+        return (d.products || []).map(p => {
+          const n = p.nutriments || {};
+          return { name: (p.product_name || "").trim(), brand: p.brands || "", kcal: +n["energy-kcal_100g"], p: +n.proteins_100g || 0, f: +n.fat_100g || 0, c: +n.carbohydrates_100g || 0, serving: p.serving_size || "" };
+        }).filter(x => x.name && x.kcal >= 20 && x.kcal <= 900).slice(0, 6);
+      } catch (e) { return []; } finally { clearTimeout(to); }
+    }
+    function renderResults(local, off, offState) {
+      const rows = local.map((x, i) => `<button type="button" class="meal-res" data-k="l${i}"><b>${esc(x.name)}</b><small>${esc(x.serving)}・${Math.round(x.kcal)}kcal・P${r1(x.p)}・F${r1(x.f)}・C${r1(x.c)}</small></button>`).join("")
+        + (off || []).map((x, i) => `<button type="button" class="meal-res off" data-k="o${i}"><b>${esc(x.name)}</b>${x.brand ? `<em>${esc(x.brand)}</em>` : ""}<small>100gあたり ${Math.round(x.kcal)}kcal・P${r1(x.p)}・F${r1(x.f)}・C${r1(x.c)}（商品データ）</small></button>`).join("");
+      $("ms-res").innerHTML = (rows || "") + (offState ? `<div class="meal-hint">${offState}</div>` : "") ;
+      $("ms-res").querySelectorAll(".meal-res").forEach(b => b.addEventListener("click", () => {
+        const k = b.dataset.k, i = parseInt(k.slice(1), 10);
+        if (k[0] === "l") { const x = local[i]; scale = null; fillForm(x.name, x.kcal * mult, x.p * mult, x.f * mult, x.c * mult, Math.round(x.price * mult), ""); }
+        else { const x = off[i]; scale = { kcal: x.kcal, p: x.p, f: x.f, c: x.c }; const gm = parseInt((String(x.serving).match(/(\d+)\s*g/) || [])[1], 10) || 100; fillForm(x.name, x.kcal * gm / 100, x.p * gm / 100, x.f * gm / 100, x.c * gm / 100, "", gm); }
+      }));
+    }
+    $("ms-q").addEventListener("input", () => {
+      const q = $("ms-q").value.trim(); clearTimeout(searchTimer);
+      if (q.length < 2) { $("ms-res").innerHTML = ""; return; }
+      const local = localHits(q); renderResults(local, [], "商品データベースを検索中…");
+      const seq = ++searchSeq;
+      searchTimer = setTimeout(async () => {
+        const off = await offHits(q, seq); if (off === null || seq !== searchSeq) return;
+        renderResults(local, off, off.length ? "" : (local.length ? "" : "見つかりませんでした。別の言い方で検索するか、下の手入力で追加してください。"));
+      }, 600);
+    });
+
+    // ---------------- 写真から入力（Gemini 無料枠） ----------------
+    const KEYNAME = "lb_gemini_key", MODELNAME = "lb_gemini_model";
+    const getKey = () => { try { return localStorage.getItem(KEYNAME) || ""; } catch (e) { return ""; } };
+    const showKeyState = () => { $("mp-keystate").textContent = getKey() ? "APIキーは保存済みです（この端末のみ）。" : "APIキーが未設定です。"; };
+    showKeyState();
+    $("mp-keysave").addEventListener("click", () => {
+      const v = $("mp-key").value.trim(); if (!v) return;
+      try { localStorage.setItem(KEYNAME, v); localStorage.removeItem(MODELNAME); } catch (e) { /* 保存不可 */ }
+      $("mp-key").value = ""; showKeyState(); $("mp-status").textContent = "キーを保存しました。写真を選んでください。";
+    });
+    async function pickModel(key) {
+      let m = ""; try { m = localStorage.getItem(MODELNAME) || ""; } catch (e) { /* なし */ }
+      if (m) return m;
+      const r = await fetch("https://generativelanguage.googleapis.com/v1beta/models?key=" + encodeURIComponent(key) + "&pageSize=200");
+      if (!r.ok) throw new Error("models:" + r.status);
+      const d = await r.json();
+      const names = (d.models || []).filter(x => (x.supportedGenerationMethods || []).includes("generateContent") && /flash/i.test(x.name) && !/lite|preview|exp|thinking|tts|image|live|audio/i.test(x.name)).map(x => x.name.replace(/^models\//, ""));
+      names.sort().reverse();
+      m = names[0] || "gemini-2.0-flash";
+      try { localStorage.setItem(MODELNAME, m); } catch (e) { /* なし */ }
+      return m;
+    }
+    async function toJpegBase64(file) {
+      const bmp = await (window.createImageBitmap ? createImageBitmap(file, { imageOrientation: "from-image" }) : Promise.reject());
+      const scaleF = Math.min(1, 1024 / Math.max(bmp.width, bmp.height));
+      const c = document.createElement("canvas"); c.width = Math.round(bmp.width * scaleF); c.height = Math.round(bmp.height * scaleF);
+      c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
+      return c.toDataURL("image/jpeg", 0.85).split(",")[1];
+    }
+    const PROMPT = "この食事の写真に写っている料理・食品をすべて挙げ、日本の一般的な1食分として、それぞれの量と栄養を推定してください。" +
+      "必ずJSONの配列だけを返してください（説明文やコードブロックは不要）。形式：[{\"name\":\"料理名\",\"amount\":\"量の説明（例：1杯、150g）\",\"kcal\":数値,\"protein\":数値(g),\"fat\":数値(g),\"carb\":数値(g)}]。" +
+      "食べ物が写っていなければ空の配列[]を返してください。値は概算でかまいません。";
+    let photoItems = [];
+    function renderPhoto() {
+      if (!photoItems.length) { $("mp-result").innerHTML = ""; return; }
+      $("mp-result").innerHTML = `<div class="meal-hint"><b>認識結果（概算）</b>：チェックして「追加」。数値は直せます。</div>` + photoItems.map((x, i) => `
+        <div class="mp-row"><label><input type="checkbox" class="mp-chk" data-i="${i}" checked> <b>${esc(x.name)}</b> <small>${esc(x.amount)}</small></label>
+          <div class="mp-nums"><input type="number" data-i="${i}" data-k="kcal" value="${Math.round(x.kcal)}"><span>kcal</span>
+          <input type="number" data-i="${i}" data-k="protein" step="0.1" value="${r1(x.protein)}"><span>P</span>
+          <input type="number" data-i="${i}" data-k="fat" step="0.1" value="${r1(x.fat)}"><span>F</span>
+          <input type="number" data-i="${i}" data-k="carb" step="0.1" value="${r1(x.carb)}"><span>C</span></div></div>`).join("") +
+        `<button type="button" id="mp-add" class="meal-primary" style="margin-top:8px;">選んだものを追加</button>`;
+      $("mp-result").querySelectorAll("input[type=number]").forEach(inp => inp.addEventListener("input", () => { photoItems[+inp.dataset.i][inp.dataset.k] = parseFloat(inp.value) || 0; }));
+      $("mp-add").addEventListener("click", async () => {
+        const sel = [...$("mp-result").querySelectorAll(".mp-chk")].filter(c => c.checked).map(c => photoItems[+c.dataset.i]);
+        for (const x of sel) { if (!(await add({ date: day, meal: $("meal-type").value, name: x.name, kcal: Math.round(x.kcal), protein: r1(x.protein), fat: r1(x.fat), carb: r1(x.carb), price: null }))) return; }
+        photoItems = []; renderPhoto(); $("mp-status").textContent = `${sel.length}件を追加しました。`; fetchAll();
+      });
+    }
+    $("mp-file").addEventListener("change", async () => {
+      const file = $("mp-file").files[0]; if (!file) return;
+      const key = getKey();
+      if (!key) { $("mp-settings").open = true; $("mp-status").textContent = "先に、下の設定でAPIキーを保存してください。"; $("mp-file").value = ""; return; }
+      $("mp-result").innerHTML = ""; $("mp-status").textContent = "認識しています…（10〜20秒）";
+      try {
+        const b64 = await toJpegBase64(file), model = await pickModel(key);
+        const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ contents: [{ parts: [{ text: PROMPT }, { inline_data: { mime_type: "image/jpeg", data: b64 } }] }], generationConfig: { temperature: 0.2, responseMimeType: "application/json" } }),
+        });
+        if (r.status === 400 || r.status === 401 || r.status === 403) throw new Error("キーが正しくないか、権限がありません（" + r.status + "）。キーを確認してください。");
+        if (r.status === 429) throw new Error("無料枠の利用上限に達しました。しばらく待ってからやり直してください。");
+        if (r.status === 404) { try { localStorage.removeItem(MODELNAME); } catch (e) { /* なし */ } throw new Error("モデルが見つかりません。もう一度お試しください。"); }
+        if (!r.ok) throw new Error("認識に失敗しました（" + r.status + "）。");
+        const d = await r.json();
+        const text = (((d.candidates || [])[0] || {}).content || {}).parts ? d.candidates[0].content.parts.map(p => p.text || "").join("") : "";
+        const arr = JSON.parse(text.replace(/^```(?:json)?/i, "").replace(/```$/, "").trim());
+        photoItems = (Array.isArray(arr) ? arr : []).filter(x => x && x.name).map(x => ({ name: String(x.name).slice(0, 60), amount: x.amount || "", kcal: +x.kcal || 0, protein: +x.protein || 0, fat: +x.fat || 0, carb: +x.carb || 0 }));
+        $("mp-status").textContent = photoItems.length ? "" : "食べ物を認識できませんでした。別の写真か、検索・手入力をお試しください。";
+        renderPhoto();
+      } catch (e) {
+        $("mp-status").textContent = e && e.message && !/JSON|Unexpected/.test(e.message) ? e.message : "結果を読み取れませんでした。もう一度お試しください。";
+      } finally { $("mp-file").value = ""; }
+    });
+
     $("meal-type").value = mealNow();
     $("meal-mult").addEventListener("change", (e) => { mult = parseFloat(e.target.value) || 1; });
     $("meal-date").addEventListener("change", (e) => { day = e.target.value || day; fetchAll(); });
@@ -261,7 +452,7 @@
       const ok = await add({ date: day, meal: $("meal-type").value, name: $("mf-name").value.trim(), kcal: parseFloat($("mf-kcal").value) || 0,
         protein: parseFloat($("mf-p").value) || 0, fat: parseFloat($("mf-f").value) || 0, carb: parseFloat($("mf-c").value) || 0,
         price: $("mf-price").value ? parseInt($("mf-price").value, 10) : null });
-      if (ok){ e.target.reset(); $("mf-p").value = 0; $("mf-f").value = 0; $("mf-c").value = 0; fetchAll(); }
+      if (ok){ scale = null; e.target.reset(); $("mf-p").value = 0; $("mf-f").value = 0; $("mf-c").value = 0; fetchAll(); }
     });
     $("bw-save").addEventListener("click", async () => {
       const kg = parseFloat($("bw-kg").value); if (!kg) return;
