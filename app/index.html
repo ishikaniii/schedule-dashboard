@@ -218,6 +218,8 @@
   .form-anim-cap #form-anim-label{ color:var(--strength); font-weight:600; }
   .form-anim-cap .fa-hint{ color:var(--ink-dim); }
   .fg-video{ display:inline-block; margin-top:10px; padding:6px 12px; border:1px solid var(--border); border-radius:999px; font-size:12.5px; color:var(--ink); text-decoration:none; background:var(--surface-2); }
+  .fg-fn{ font-size:12px; margin-top:8px; color:var(--ink); } .fg-fn span{ color:var(--ink-dim); }
+  .reco .reco-chip .rc-pat{ display:block; font-size:10px; opacity:.75; line-height:1.1; }
   .form-guide summary{ cursor:pointer; font-weight:600; }
   .form-guide dl{ margin:8px 0 0; } .form-guide dt{ font-size:11.5px; color:var(--strength); font-weight:600; margin-top:8px; letter-spacing:.03em; }
   .form-guide dd{ margin:2px 0 0; }
@@ -2378,7 +2380,38 @@
     {n:"サイドプランク", part:"体幹", p:["obliques"], s:["abs"]},
     {n:"ロシアンツイスト", part:"体幹", p:["obliques"], s:["abs"]},
     {n:"ヒップリフト", part:"体幹", p:["glutes"], s:["hamstrings","abs"]},
+    // 実用系（2026-09-20追加：筋肥大より「使える体」を優先する方針）
+    {n:"ゴブレットスクワット", part:"脚", p:["quads","glutes"], s:["abs","hamstrings","adductors"]},
+    {n:"ケトルベルスイング", part:"脚", p:["glutes","hamstrings"], s:["lower_back","abs","delts_front","forearms"]},
+    {n:"ステップアップ", part:"脚", p:["quads","glutes"], s:["hamstrings","calves"]},
+    {n:"ファーマーズウォーク", part:"体幹", p:["forearms","traps"], s:["abs","obliques","glutes","calves"]},
+    {n:"パロフプレス", part:"体幹", p:["obliques","abs"], s:["delts_front","chest"]},
   ];
+
+  // ---- 実用度と動作パターン（2026-09-20） ----
+  // 目標：筋肥大ではなく「実際に使える強さ」。日常・スポーツで使う基本動作
+  // （しゃがむ・持ち上げる・押す・引く・体幹を固める・運ぶ）を、全身を使う多関節種目で
+  // 鍛える方針。fn: 3=全身/多関節の基本（優先）、2=補助的な多関節・マシン、
+  // 1=単関節のアイソレーション（見た目・部分強化向き、優先度は低い）。
+  const PATTERN_LABEL = { squat: "しゃがむ・立つ（脚）", hinge: "持ち上げる・引き抜く（股関節）", push: "押す", pull: "引く", core: "体幹を固める", carry: "運ぶ・握る" };
+  const FN = {
+    "スクワット":["squat",3], "フロントスクワット":["squat",3], "ゴブレットスクワット":["squat",3], "ランジ":["squat",3],
+    "ブルガリアンスクワット":["squat",3], "ステップアップ":["squat",3], "レッグプレス":["squat",2],
+    "レッグエクステンション":["squat",1], "カーフレイズ":["squat",2], "アダクション":["squat",1],
+    "デッドリフト":["hinge",3], "ルーマニアンデッドリフト":["hinge",3], "ヒップスラスト":["hinge",3], "ケトルベルスイング":["hinge",3],
+    "バックエクステンション":["hinge",2], "ヒップリフト":["hinge",2], "レッグカール":["hinge",1],
+    "ベンチプレス":["push",3], "インクラインベンチプレス":["push",3], "ダンベルプレス":["push",3], "腕立て伏せ":["push",3],
+    "ディップス":["push",3], "ショルダープレス":["push",3], "ナローベンチプレス":["push",2], "チェストプレス":["push",2],
+    "ダンベルフライ":["push",1], "ペックフライ":["push",1], "サイドレイズ":["push",1], "フロントレイズ":["push",1],
+    "トライセプスエクステンション":["push",1], "ケーブルプレスダウン":["push",1], "キックバック":["push",1],
+    "懸垂":["pull",3], "ベントオーバーロウ":["pull",3], "ダンベルロウ":["pull",3], "ラットプルダウン":["pull",3], "シーテッドロウ":["pull",3],
+    "フェイスプル":["pull",2], "プルオーバー":["pull",2], "アップライトロウ":["pull",2], "リアレイズ":["pull",1],
+    "バーベルカール":["pull",1], "ダンベルカール":["pull",1], "ハンマーカール":["pull",1], "プリーチャーカール":["pull",1],
+    "プランク":["core",3], "サイドプランク":["core",3], "アブローラー":["core",3], "パロフプレス":["core",3],
+    "ロシアンツイスト":["core",2], "レッグレイズ":["core",2], "クランチ":["core",1],
+    "ファーマーズウォーク":["carry",3], "シュラッグ":["carry",1], "リストカール":["carry",1],
+  };
+  const fnOf = (n) => (FN[n] || ["push", 1]);
   const PARTS = ["胸","背中","肩","腕","脚","体幹"];
   const exerciseByName = Object.fromEntries(EXERCISES.map(e => [e.n, e]));
 
@@ -2523,7 +2556,9 @@
     const box = document.getElementById("form-guide"), body = document.getElementById("form-guide-body");
     const g = window.FORM_GUIDE && window.FORM_GUIDE[name];
     if (!g){ box.style.display = "none"; return; }
-    body.innerHTML = `<dl>
+    const [fpat, flv] = fnOf(name);
+    const fnLabel = flv >= 3 ? "★★★ 全身を使う基本動作（優先）" : flv === 2 ? "★★☆ 補助的な種目" : "★☆☆ 部分的な強化（優先度は低め）";
+    body.innerHTML = `<div class="fg-fn">実用度：${fnLabel}　<span>動作：${escapeHtml(PATTERN_LABEL[fpat] || "")}</span></div><dl>
       <dt>準備</dt><dd>${escapeHtml(g.setup)}</dd>
       <dt>動作</dt><dd>${escapeHtml(g.move)}</dd>
       <dt>よくあるミス</dt><dd>${escapeHtml(g.avoid)}</dd>
@@ -2548,62 +2583,68 @@
   }
   const ANIM_ENABLED = true;
 
-  // ---- 今日のおすすめメニュー ----
-  // 考え方：①直近7日のセット数が一番少ない部位を優先（偏りをならす）、
-  // ②昨日・今日に鍛えた部位は回復のため避ける（同じ部位は48時間あけるのが目安）、
-  // ③その部位の代表的な種目（カタログの先頭＝基本の多関節種目）から3つ。
-  // 記録が無いうちは、全身の基本種目（スクワット・ベンチプレス・ラットプルダウン）を勧める。
+  // ---- 今日のおすすめメニュー（実用重視：動作パターン方式、2026-09-20） ----
+  // 考え方：見た目の部位ではなく「使える動き」で偏りをならす。
+  //   ① 6つの動作パターン（しゃがむ／持ち上げる／押す／引く／体幹／運ぶ）ごとに
+  //      直近7日のセット数を数え、少ないパターンから選ぶ。
+  //   ② 各パターンから、全身を使う多関節の基本種目（実用度★★★）を1つ。
+  //      その中でも「最後にやってから日が空いている種目」を優先（マンネリ防止）。
+  //   ③ 昨日、同じパターンの★★★を行っていたら後回し（回復）。
+  //   ④ 単関節のアイソレーション（カール・レイズ等）は勧めない。
+  // 記録が無いうちは「しゃがむ・引く・押す・体幹」の4つの基本から始める。
   function renderReco(){
     const box = document.getElementById("reco-box");
     if (!box) return;
     const today = new Date(), fmt = (d) => ymd(d);
     const d7 = fmt(addDays(today, -7)), d1 = fmt(addDays(today, -1));
-    const sets = Object.fromEntries(PARTS.map(p => [p, 0]));
-    const recent = new Set();
+    const PATS = ["squat", "hinge", "push", "pull", "core", "carry"];
+    const sets = Object.fromEntries(PATS.map(p => [p, 0]));
+    const yesterday = new Set();
+    const lastDone = {};
     strengthLogs.forEach(l => {
-      const ex = exerciseByName[l.exercise]; if (!ex) return;
-      if (l.date >= d7) sets[ex.part] += (l.sets || 1);
-      if (l.date >= d1) recent.add(ex.part);
+      const [pat, lv] = fnOf(l.exercise);
+      if (!exerciseByName[l.exercise]) return;
+      if (l.date >= d7) sets[pat] += (l.sets || 1);
+      if (l.date >= d1 && lv >= 3) yesterday.add(pat);
+      if (!lastDone[l.exercise] || l.date > lastDone[l.exercise]) lastDone[l.exercise] = l.date;
     });
-    const anyLog = strengthLogs.some(l => l.date >= d7);
-    let title, why, exs, alts = [];
+    const pickFor = (pat) => {
+      const pool = EXERCISES.filter(e => fnOf(e.n)[0] === pat && fnOf(e.n)[1] >= 3);
+      // 直近3日にやった種目は後回し。それ以外はカタログ順（＝基本の定番が先）で、マンネリ防止のため
+      // 3日以上あいた種目から選ぶ。
+      const d3 = fmt(addDays(today, -3));
+      pool.sort((a, b) => ((lastDone[a.n] || "0") >= d3) - ((lastDone[b.n] || "0") >= d3));
+      return pool[0] ? pool[0].n : null;
+    };
+    let title, why, picks = [];
     if (!strengthLogs.length){
-      title = "はじめの一歩：全身の基本3種目";
-      why = "記録がまだ無いので、全身をバランスよく使う定番の3種目から。まずは軽い重量でフォームを確認しましょう。";
-      exs = ["スクワット", "ベンチプレス", "ラットプルダウン"];
+      title = "はじめの一歩：実用的な基本4動作";
+      why = "記録がまだ無いので、日常やスポーツで使う基本の動き（しゃがむ・引く・押す・体幹）から。まずは軽い重量でフォームを覚えましょう。";
+      picks = [["squat", "ゴブレットスクワット"], ["pull", "ラットプルダウン"], ["push", "腕立て伏せ"], ["core", "プランク"]];
     } else {
-      const order = PARTS.slice().sort((a, b) => sets[a] - sets[b]);
-      const avail = order.filter(p => !recent.has(p));
-      if (!avail.length){
-        title = "今日は回復日がおすすめ";
-        why = "全部位を昨日〜今日に鍛えています。軽い有酸素運動（ウォーキング・ジョグ）やストレッチで回復を優先しましょう。";
-        exs = [];
-      } else {
-        const p = avail[0];
-        title = `おすすめ：${p}`;
-        why = `直近7日の${p}は${sets[p]}セット` + (anyLog ? "（6部位の中で" + (sets[p] === order[0] ? "最少" : "少なめ") + "）" : "") +
-              (recent.size ? `。${[...recent].join("・")}は昨日・今日に鍛えたので避けています` : "") + "。";
-        exs = EXERCISES.filter(e => e.part === p).slice(0, 3).map(e => e.n);
-        alts = avail.slice(1, 3);
-      }
+      const order = PATS.filter(p => p !== "carry").sort((a, b) => (yesterday.has(a) - yesterday.has(b)) || (sets[a] - sets[b]));
+      const chosen = order.slice(0, 3);
+      if (!chosen.includes("core")) chosen.push("core");
+      picks = chosen.map(p => [p, pickFor(p)]).filter(x => x[1]);
+      if (sets.carry === 0 && !picks.some(x => x[0] === "carry") && strengthLogs.length >= 6) picks.push(["carry", pickFor("carry")]);
+      const low = order.slice(0, 3).map(p => `${PATTERN_LABEL[p].split("（")[0]}(${sets[p]})`).join("・");
+      title = "今日のおすすめ：実用重視の全身メニュー";
+      why = `直近7日で手薄な動き：${low}（かっこ内はセット数）。` +
+            (yesterday.size ? `昨日やった「${[...yesterday].map(p => PATTERN_LABEL[p].split("（")[0]).join("・")}」は後回しにしています。` : "") +
+            "筋肥大より、全身を使う多関節の基本種目を優先しています。";
     }
-    const goal = "目安：各種目 3セット × 8〜12回、余力1〜2回（RPE 7〜8）。ウォームアップを先に。";
+    const goal = "目安：主要種目は 3〜5セット × 4〜6回（RPE 7〜8・フォーム最優先）。体幹の保持系は 30〜60秒×2〜3セット。回数が楽にこなせたら、まず重さを少し足す。";
     box.innerHTML = `<div class="reco-title">今日のおすすめメニュー</div>
       <div class="reco-why"><b>${escapeHtml(title)}</b><br>${escapeHtml(why)}</div>
-      ${exs.length ? `<div class="reco-chips">${exs.map(n => `<button type="button" class="reco-chip" data-ex="${escapeHtml(n)}">${escapeHtml(n)}</button>`).join("")}</div>
-      <div class="reco-why" style="margin-top:6px;">${escapeHtml(goal)}</div>` : ""}
-      ${alts.length ? `<div class="reco-alt">他の候補：${alts.map(p => `<button type="button" data-part="${p}">${p}</button>`).join("")}</div>` : ""}`;
+      <div class="reco-chips">${picks.map(([pat, n]) =>
+        `<button type="button" class="reco-chip" data-ex="${escapeHtml(n)}"><span class="rc-pat">${escapeHtml(PATTERN_LABEL[pat].split("（")[0])}</span>${escapeHtml(n)}</button>`).join("")}</div>
+      <div class="reco-why" style="margin-top:6px;">${escapeHtml(goal)}</div>`;
     box.querySelectorAll(".reco-chip").forEach(b => b.addEventListener("click", () => {
       const ex = exerciseByName[b.dataset.ex];
       if (ex){ currentPart = ex.part; [...document.getElementById("part-tabs").children].forEach(x => x.classList.toggle("active", x.dataset.part === currentPart)); }
       document.getElementById("s-exercise").value = b.dataset.ex;
       onExerciseChanged();
       document.getElementById("form-guide").scrollIntoView({ behavior: "smooth", block: "nearest" });
-    }));
-    box.querySelectorAll(".reco-alt button").forEach(b => b.addEventListener("click", () => {
-      currentPart = b.dataset.part;
-      [...document.getElementById("part-tabs").children].forEach(x => x.classList.toggle("active", x.dataset.part === currentPart));
-      renderExerciseButtons();
     }));
   }
 

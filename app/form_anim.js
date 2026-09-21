@@ -20,11 +20,28 @@
   const up = (a) => [Math.sin(a * D), Math.cos(a * D)];    // 「真上=0」の方向ベクトル
   const add = (p, v, s) => [p[0] + v[0] * s, p[1] + v[1] * s];
 
-  function joints(q) {
+  // 2関節（肩→肘→手首）のIK：手首を target に届かせる。bend=+1/-1 で肘の曲がる向きを選ぶ。
+  // バーを担ぐ・腰に乗せる種目で、手とバーが離れて見えないようにするために使う。
+  function solveArm(sh, target, bend) {
+    const dx = target[0] - sh[0], dy = target[1] - sh[1];
+    const d = Math.min(Math.max(Math.hypot(dx, dy), Math.abs(L.ua - L.fa) + 0.01), L.ua + L.fa - 0.005);
+    const base = Math.atan2(dy, dx);
+    const cosA = (L.ua * L.ua + d * d - L.fa * L.fa) / (2 * L.ua * d);
+    const alpha = Math.acos(Math.max(-1, Math.min(1, cosA))) * bend;
+    const el = [sh[0] + L.ua * Math.cos(base + alpha), sh[1] + L.ua * Math.sin(base + alpha)];
+    return { el, wr: target };
+  }
+
+  function joints(q, ex) {
     const hip = [0, 0];
     const knee = add(hip, dn(q.a1), L.thigh);
     const ankle = add(knee, dn(q.a2), L.shin);
     const sh = add(hip, up(q.t), L.torso);
+    if (ex && ex.grip && ex.grip.at) {
+      const tg = ex.grip.at === "hip" ? hip : [sh[0] + ex.grip.off[0], sh[1] + ex.grip.off[1]];
+      const { el, wr } = solveArm(sh, tg, ex.grip.bend || 1);
+      return { hip, knee, ankle, sh, el, wr };
+    }
     const el = add(sh, dn(q.b1), L.ua);
     const wr = add(el, dn(q.b2), L.fa);
     return { hip, knee, ankle, sh, el, wr };
@@ -52,38 +69,39 @@
     "スクワット": {
       mode: "ankle", cam: [0, 0.95, 4.0],
       A: A(4, 2, -2, -25, 150), B: A(42, 88, -18, 15, 140),
+      grip: { at: "sh", off: [-0.07, 0.04], bend: 1 }, gz: 0.3,
       labels: ["しゃがむ（お尻を後ろへ・膝はつま先方向）", "立つ（足裏全体で床を押す）"],
-      equip: [{ t: "bar", at: "sh", off: [-0.07, 0.04], r: 0.2 }],
+      equip: [{ t: "bar", at: "wr", r: 0.2 }],
     },
     "ベンチプレス": {
       mode: "root", root: [0, 0.5], cam: [-0.2, 0.7, 3.6],
-      A: A(-90, 100, 0, 180, 180), B: A(-90, 100, 0, 95, 180),
+      A: A(-90, 100, 0, 180, 180), B: A(-90, 100, 0, 95, 180), gz: 0.3,
       labels: ["ゆっくり下ろす（胸に軽く触れる）", "押し上げる（肩甲骨は寄せたまま）"],
       equip: [{ t: "bar", at: "wr", r: 0.2 }, { t: "box", x0: -0.85, x1: 0.12, y0: 0, y1: 0.36 }],
     },
     "デッドリフト": {
       mode: "ankle", cam: [0, 0.85, 4.0],
-      A: A(60, 75, -20, -10, -10), B: A(4, 1, -1, -3, -3),
+      A: A(60, 75, -20, -10, -10), B: A(4, 1, -1, -3, -3), gz: 0.28,
       labels: ["構え（背中まっすぐ・バーは体の近く）", "立ち上がる（床を足で押す）"],
       equip: [{ t: "bar", at: "wr", r: 0.225 }],
       startAt: "A",
     },
     "ショルダープレス": {
       mode: "ankle", cam: [0, 1.2, 4.2],
-      A: A(0, 0, 0, 10, 180), B: A(0, 0, 0, 180, 180),
+      A: A(0, 0, 0, 10, 180), B: A(0, 0, 0, 180, 180), gz: 0.3,
       labels: ["押し上げる（真上へ）", "ゆっくり下ろす（肩の高さまで）"],
       equip: [{ t: "bar", at: "wr", r: 0.2 }],
     },
     "ラットプルダウン": {
       mode: "root", root: [0, 0.48], cam: [0.1, 1.15, 4.0],
-      A: A(-8, 85, 0, 165, 175), B: A(-12, 85, 0, 25, 165),
+      A: A(-8, 85, 0, 165, 175), B: A(-12, 85, 0, 25, 165), gz: 0.48,
       labels: ["肘を下・後ろへ引く（バーを鎖骨へ）", "ゆっくり戻す（背中を伸ばす）"],
       equip: [{ t: "line", from: "wr", to: [0.05, 2.4] }, { t: "bar", at: "wr", r: 0 },
               { t: "box", x0: -0.25, x1: 0.15, y0: 0, y1: 0.38 }],
     },
     "懸垂": {
       mode: "hands", hands: [0.05, 2.05], cam: [0, 1.15, 4.6],
-      A: A(0, 5, -25, 180, 180), B: A(-5, 5, -25, 15, 170),
+      A: A(0, 5, -25, 180, 180), B: A(-5, 5, -25, 15, 170), gz: 0.42,
       labels: ["肘を体の下へ引き込む（顎をバーの上へ）", "ゆっくり下ろす"],
       equip: [{ t: "bar", at: "wr", r: 0 }],
     },
@@ -95,21 +113,22 @@
     },
     "ケーブルプレスダウン": {
       mode: "ankle", cam: [0, 1.15, 3.9],
-      A: A(8, 0, 0, 10, 100), B: A(8, 0, 0, 10, 5),
+      A: A(8, 0, 0, 10, 100), B: A(8, 0, 0, 10, 5), gz: 0.12,
       labels: ["押し下げる（肘は脇に固定）", "ゆっくり戻す（肘は約90°まで）"],
       equip: [{ t: "line", from: "wr", to: [0.2, 2.25] }, { t: "bar", at: "wr", r: 0 }],
     },
     "ベントオーバーロウ": {
       mode: "ankle", cam: [0.1, 0.85, 3.9],
-      A: A(65, 30, -10, 0, 0), B: A(65, 30, -10, -75, -10),
+      A: A(65, 30, -10, 0, 0), B: A(65, 30, -10, -75, -10), gz: 0.3,
       labels: ["肘を後ろへ引く（背中は丸めない）", "ゆっくり下ろす"],
       equip: [{ t: "bar", at: "wr", r: 0.2 }],
     },
     "ヒップスラスト": {
       mode: "ankle", cam: [-0.3, 0.6, 3.4],
       A: A(-62, 122, -5, 0, 0), B: A(-98, 96, 0, 0, 0),
+      grip: { at: "hip", bend: -1 }, gz: 0.3,
       labels: ["お尻を締めて持ち上げる（体が一直線に）", "ゆっくり下ろす"],
-      equip: [{ t: "bar", at: "hip", r: 0.16 }, { t: "boxAtShoulder" }],
+      equip: [{ t: "bar", at: "wr", r: 0.16 }, { t: "boxAtShoulder" }],
     },
   };
 
@@ -196,15 +215,20 @@
         const b = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.42, 0.4), benchMat); g.add(b); S.dyn.push({ e, mesh: b });
       } else if (e.t === "bar") {
         const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 1.3, 10), gearMat); bar.rotation.x = Math.PI / 2;
+        // 手が握る位置(gz)より外側まで棒を伸ばす（手が棒に触れて見えるように）
         const holder = new THREE.Group(); holder.add(bar);
         if (e.r > 0) for (const z of [0.5, -0.5]) {
           const pl = new THREE.Mesh(new THREE.CylinderGeometry(e.r, e.r, 0.05, 28), plateMat); pl.rotation.x = Math.PI / 2; pl.position.z = z; holder.add(pl);
         }
         g.add(holder); S.dyn.push({ e, mesh: holder });
       } else if (e.t === "db") {
-        const holder = new THREE.Group();
-        for (const z of [0.19, -0.19]) { const d = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.07, 18), plateMat); d.rotation.x = Math.PI / 2; d.position.z = z; holder.add(d); }
-        g.add(holder); S.dyn.push({ e, mesh: holder });
+        // ダンベルは左右の手に1つずつ：握り（細い棒）を手の位置に通し、両端に円盤
+        for (const s of [1, -1]) {
+          const holder = new THREE.Group();
+          const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.16, 10), gearMat); grip.rotation.x = Math.PI / 2; holder.add(grip);
+          for (const z of [0.09, -0.09]) { const d = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.05, 18), plateMat); d.rotation.x = Math.PI / 2; d.position.z = z; holder.add(d); }
+          g.add(holder); S.dyn.push({ e, mesh: holder, side: s });
+        }
       } else if (e.t === "line") {
         const m = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 1, 6), gearMat); g.add(m); S.dyn.push({ e, mesh: m });
       }
@@ -217,7 +241,7 @@
 
   function pose(ex, k) {
     const q = lerpQ(ex.A, ex.B, k);
-    return { q, j: place(ex, joints(q)) };
+    return { q, j: place(ex, joints(q, ex)) };
   }
 
   function update(ex, k) {
@@ -227,7 +251,8 @@
     const dirT = new THREE.Vector2(...up(q.t));
     for (const s of [1, -1]) {
       const hip = V3(j.hip, s * zh), knee = V3(j.knee, s * zh), ankle = V3(j.ankle, s * zh), toe = V3([j.ankle[0] + 0.22, j.ankle[1] - 0.075], s * zh);
-      const sh = V3(j.sh, s * zs), el = V3(j.el, s * zs), wr = V3(j.wr, s * zs);
+      const gz = S.ex.gz != null ? S.ex.gz : zs;                 // 手を置く幅（バーの握り幅）
+      const sh = V3(j.sh, s * zs), el = V3(j.el, s * (zs + gz) / 2), wr = V3(j.wr, s * gz);
       setLimb(P["thigh" + s], hip, knee); setLimb(P["shin" + s], knee, ankle); setLimb(P["foot" + s], ankle, toe);
       setLimb(P["ua" + s], sh, el); setLimb(P["fa" + s], el, wr);
       P["knee" + s].position.copy(knee); P["ankle" + s].position.copy(ankle);
@@ -242,10 +267,12 @@
 
     for (const d of S.dyn) {
       const e = d.e;
-      if (e.t === "bar" || e.t === "db") {
+      if (e.t === "bar") {
         const p = e.at === "wr" ? j.wr : e.at === "hip" ? j.hip : j.sh;
         const o = e.off || [0, 0];
         d.mesh.position.set(p[0] + o[0], p[1] + o[1], 0);
+      } else if (e.t === "db") {
+        d.mesh.position.set(j.wr[0], j.wr[1], d.side * zs);
       } else if (e.t === "line") {
         const a = V3(j.wr, 0), b = new THREE.Vector3(e.to[0], e.to[1], 0);
         setLimb(d.mesh, a, b);
@@ -262,6 +289,7 @@
     if (!ex || typeof THREE === "undefined") return false;
     ensure(container);
     S.ex = ex; S.name = name;
+    if (opts && opts.yaw != null) S.yaw = opts.yaw;
     build(ex);
     const cam = ex.cam;
     S.camTarget = new THREE.Vector3(cam[0], cam[1], 0); S.camDist = cam[2] * 0.85;
