@@ -202,6 +202,8 @@
   .pend-row{ flex-wrap:wrap; }
   .pend-edit{ flex:1 0 100%; display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
   .pend-edit .pend-memo{ flex:1 1 180px; min-width:0; }
+  .sync-now-btn{ border:1px solid var(--border); background:var(--surface); color:var(--ink); border-radius:999px; padding:7px 14px; font-size:12.5px; cursor:pointer; }
+  .sync-now-btn:disabled{ opacity:.6; cursor:default; }
   .credit{ font-size:10.5px; color:var(--ink-dim); line-height:1.5; margin:18px 4px 4px; }
   .credit a{ color:var(--ink-dim); }
   .body-hint{ font-size:10.5px; color:var(--ink-dim); text-align:center; line-height:1.3; }
@@ -375,6 +377,7 @@
       <h1>LifeBase</h1>
       <div class="sub">ダッシュボード・家計簿・スケジュール・目標・トレログ</div>
     </div>
+    <button type="button" id="sync-now-btn" class="sync-now-btn">今すぐ同期</button>
   </header>
 
   <div id="status-banner" class="status-banner"></div>
@@ -911,6 +914,43 @@
     else if (tab === "goals") { loadGoals(); }
     else if (tab === "train") { renderStrengthChart(); renderCardioChart(); if (!trainInited) initTrain(); }
   }
+
+  // 「今すぐ同期」：Supabaseに同期要求を入れ、PC側（1分おきに監視）が拾って実行するのを待つ。
+  // PCが起動していない／スリープ中は実行されない（起動後の1分以内に処理される）。
+  (function initSyncNow(){
+    const btn = document.getElementById("sync-now-btn");
+    btn.addEventListener("click", async () => {
+      btn.disabled = true; btn.textContent = "要求中...";
+      const { data, error } = await sb.from("sync_requests").insert({ status: "requested" }).select();
+      if (error){
+        btn.disabled = false; btn.textContent = "今すぐ同期";
+        showBanner(/sync_requests/.test(error.message || "") ? "同期ボタンを使うには、Supabaseで schema.sql の sync_requests 追加SQLの実行が必要です" : "同期の要求に失敗しました: " + error.message);
+        return;
+      }
+      const id = data && data[0] ? data[0].id : null;
+      const t0 = Date.now();
+      btn.textContent = "PCが同期中...";
+      const poll = async () => {
+        const { data: rows } = await sb.from("sync_requests").select("status,note").eq("id", id);
+        const st = rows && rows[0] ? rows[0].status : null;
+        if (st === "done" || st === "failed"){
+          dashboardSnapCache = null;
+          const cur = document.querySelector(".nav-btn.active");
+          loadTab(cur ? cur.dataset.tab : "home");
+          btn.textContent = st === "done" ? "同期しました" : "同期に失敗";
+          if (st === "failed") showBanner("PC側の同期が失敗しました。" + (rows[0].note || ""));
+          setTimeout(() => { btn.disabled = false; btn.textContent = "今すぐ同期"; }, 4000);
+        } else if (Date.now() - t0 > 240000){
+          btn.textContent = "PCから応答なし";
+          showBanner("PCが応答しません（電源オフ・スリープ中の可能性）。PCが起動すると自動で同期されます。");
+          setTimeout(() => { btn.disabled = false; btn.textContent = "今すぐ同期"; }, 4000);
+        } else {
+          setTimeout(poll, 4000);
+        }
+      };
+      setTimeout(poll, 4000);
+    });
+  })();
 
   function initApp(){
     loadHome();
