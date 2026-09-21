@@ -220,6 +220,9 @@
   .fg-video{ display:inline-block; margin-top:10px; padding:6px 12px; border:1px solid var(--border); border-radius:999px; font-size:12.5px; color:var(--ink); text-decoration:none; background:var(--surface-2); }
   .fg-fn{ font-size:12px; margin-top:8px; color:var(--ink); } .fg-fn span{ color:var(--ink-dim); }
   .reco .reco-chip .rc-pat{ display:block; font-size:10px; opacity:.75; line-height:1.1; }
+  .reco-week{ font-size:12.5px; line-height:1.55; margin:2px 0 8px; padding:6px 8px; border-radius:8px; background:var(--surface); border:1px solid var(--border); }
+  .reco-perweek{ display:inline-block; margin-left:8px; font-size:12px; color:var(--ink-dim); white-space:nowrap; }
+  .reco-perweek select{ font-size:12px; padding:1px 2px; margin:0 2px; }
   .reco-tracks{ display:flex; gap:6px; margin:2px 0 8px; flex-wrap:wrap; }
   .reco-track{ border:1px solid var(--border); background:var(--surface); color:var(--ink-dim); border-radius:999px; padding:5px 12px; font-size:12.5px; cursor:pointer; }
   .reco-track.active{ background:var(--strength); border-color:var(--strength); color:#fff; }
@@ -1013,6 +1016,7 @@
     // トレログの「今週のトレーニング」は予定(health)をここのスナップショット
     // から読むので、スナップショットが届いた時点で描き直す。
     renderAdherenceAndStats();
+    renderReco();   // 予定（空き日の候補）はスナップショットが届いてから出せる
     const snap = data ? data.data : null;
     document.getElementById("dash-updated").textContent = data ? timeAgoLabel(data.updated_at) : "";
 
@@ -2630,9 +2634,77 @@
       (isPower ? powerDates : massDates).add(l.date);
       if (l.date >= d1) yTrack = isPower ? "power" : "mass";
     });
-    const auto = !strengthLogs.length ? "mass"
-      : (powerDates.size < massDates.size ? "power" : (massDates.size < powerDates.size ? "mass" : (yTrack === "power" ? "mass" : "power")));
+    // ---- 週ごとの進み具合（曜日は固定せず、その週の実績と予定で決める） ----
+    // 週N回（初期3回）の「型」：3回=パワー1＋質量2。回数が違えば下の型を使う。残りの型を
+    // 「今週まだやっていない種類」から数え、今日はその先頭を勧める。昨日トレーニングしていて、
+    // 残りに質量日があるなら、パワー日（新鮮さが要る）は避けて質量日を先にする。
+    const perWeek = Math.min(6, Math.max(2, parseInt(localStorage.getItem("lb_sessions_per_week") || "3", 10) || 3));
+    const TEMPLATES = { 2: ["power", "mass"], 3: ["power", "mass", "mass"], 4: ["power", "mass", "mass", "power"],
+                        5: ["power", "mass", "mass", "power", "mass"], 6: ["power", "mass", "mass", "power", "mass", "mass"] };
+    const wd = (today.getDay() + 6) % 7;                       // 月=0
+    const weekStartStr = fmt(addDays(today, -wd));
+    const weekDone = {};                                        // 日付 -> "power" | "mass"（その日に1つでもパワー系があればパワー）
+    strengthLogs.forEach(l => {
+      if (l.date < weekStartStr || !exerciseByName[l.exercise]) return;
+      const lv = fnOf(l.exercise)[1];
+      const isPower = SPEED.has(l.exercise) || (lv >= 3 && (l.reps || 99) <= 5);
+      weekDone[l.date] = (weekDone[l.date] === "power" || isPower) ? "power" : "mass";
+    });
+    const doneTypes = Object.values(weekDone);
+    const remaining = TEMPLATES[perWeek].slice();
+    doneTypes.forEach(t => { const i = remaining.indexOf(t); if (i >= 0) remaining.splice(i, 1); else remaining.shift(); });
+    const trainedToday = !!weekDone[fmt(today)];
+    let auto = !strengthLogs.length ? "mass" : (remaining[0] || (powerDates.size < massDates.size ? "power" : "mass"));
+    if (auto === "power" && yTrack && remaining.includes("mass")) auto = "mass";
     const track = recoTrack === "auto" ? auto : recoTrack;
+
+    // 空いている日の候補（カレンダーの予定から）：今日〜日曜で、7〜22時のうちバイト・授業・
+    // 私用の予定（前後30分の余裕を含む）を除いて、トレーニング用の連続90分が取れる日。
+    // 17時前後が取れるならそこ、無理なら取れる一番早い時間を候補にする。連続しないよう1日あけて選ぶ。
+    const snap = dashboardSnapCache ? dashboardSnapCache.data : null;
+    const evs = (snap && snap.calendar_events) || [];
+    const freeSlot = (ds) => {
+      const busy = [];
+      for (const e of evs){
+        if (e.date !== ds || !["shift", "class", "personal"].includes(e.family_type)) continue;
+        if (!e.start_time){ if (e.family_type === "personal") return null; continue; }      // 私用の終日予定＝その日は埋まっている
+        const st = toMinutes(e.start_time); let en = e.end_time ? toMinutes(e.end_time) : st + 60;
+        if (en <= st) en = 24 * 60;                                                           // 日付をまたぐ予定（深夜バイト）
+        busy.push([st - 30, en + 30]);
+      }
+      // 前日から日跨ぎで続く予定（深夜バイトの翌日分）は、その日の午前を埋める
+      for (const e of evs){
+        if (e.family_type === "shift" && e.end_time && e.start_time && toMinutes(e.end_time) <= toMinutes(e.start_time)
+            && ymd(addDays(parseYmd(e.date), 1)) === ds) busy.push([0, toMinutes(e.end_time) + 30]);
+      }
+      busy.sort((x, y) => x[0] - y[0]);
+      let cur = 7 * 60; const gaps = [];
+      for (const [bs, be] of busy){ if (bs - cur >= 90) gaps.push([cur, bs]); cur = Math.max(cur, be); }
+      if (22 * 60 - cur >= 90) gaps.push([cur, 22 * 60]);
+      if (!gaps.length) return null;
+      const around17 = gaps.find(g => g[0] <= 17 * 60 && g[1] >= 18.5 * 60);
+      if (around17) return 17 * 60;
+      const g = gaps.find(g => g[1] >= 15 * 60) || gaps[0];                                 // 夕方以降を優先
+      return Math.max(g[0], 15 * 60 <= g[1] - 90 ? 15 * 60 : g[0]);
+    };
+    const fmtHM2 = (m) => `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`;
+    const freeDays = [];
+    for (let i = trainedToday ? 1 : 0; i <= 6 - wd; i++){
+      const ds = fmt(addDays(today, i));
+      const slot = freeSlot(ds);
+      if (slot != null) freeDays.push({ ds, i, slot });
+    }
+    const chosen = [];
+    freeDays.forEach(d => { if (chosen.length < remaining.length && (!chosen.length || d.i - chosen[chosen.length - 1].i >= 2)) chosen.push(d); });
+    freeDays.forEach(d => { if (chosen.length < remaining.length && !chosen.includes(d)) chosen.push(d); });   // 足りなければ連続でも
+    chosen.sort((a, b) => a.i - b.i);
+    const parseDay = parseYmd;
+    const DOWJ = ["日", "月", "火", "水", "木", "金", "土"];
+    const dayLabel = (d) => (d.i === 0 ? "今日" : `${DOWJ[parseDay(d.ds).getDay()]}(${d.ds.slice(5).replace("-", "/")})`) + ` ${fmtHM2(d.slot)}ごろ〜`;
+    const weekLine = remaining.length
+      ? `今週：週${perWeek}回の目標のうち${doneTypes.length}回済み → 残り${remaining.length}回（${remaining.map(t => t === "power" ? "パワー日" : "質量日").join("→")}）。` +
+        (chosen.length ? `予定の空き状況から、実施の候補日は ${chosen.map(dayLabel).join("・")}。` : "今週は90分続けて空いている日が見つかりません（次週に回すか、短めのメニューで）。")
+      : `今週：週${perWeek}回の目標は達成済みです。追加で行うなら軽めの補助・有酸素・ストレッチを。`;
 
     const recentFirst = (list) => list.slice().sort((a, b) => ((lastDone[a] || "0") >= d3) - ((lastDone[b] || "0") >= d3));
     const leastRecent = (list) => list.slice().sort((a, b) => (lastDone[a] || "0").localeCompare(lastDone[b] || "0"))[0];
@@ -2664,12 +2736,15 @@
     const care = "質量には、たんぱく質（体重×1.6〜2.2g/日が目安）・十分な食事量・睡眠（7時間以上）も欠かせません。";
     const tabBtn = (id, label) => `<button type="button" class="reco-track${track === id ? " active" : ""}" data-track="${id}">${label}${auto === id ? "（おすすめ）" : ""}</button>`;
     box.innerHTML = `<div class="reco-title">今日のおすすめメニュー</div>
+      <div class="reco-week">${escapeHtml(weekLine)}<label class="reco-perweek">週<select id="reco-perweek">${[2,3,4,5,6].map(n => `<option value="${n}"${n === perWeek ? " selected" : ""}>${n}</option>`).join("")}</select>回</label></div>
       <div class="reco-tracks">${tabBtn("power", "速筋パワー日")}${tabBtn("mass", "質量日")}</div>
       <div class="reco-why"><b>${escapeHtml(title)}</b><br>${escapeHtml(why)}</div>
       <div class="reco-chips">${picks.filter(x => x[1]).map(([role, n]) =>
         `<button type="button" class="reco-chip" data-ex="${escapeHtml(n)}"><span class="rc-pat">${escapeHtml(role)}</span>${escapeHtml(n)}</button>`).join("")}</div>
       <div class="reco-why" style="margin-top:6px;">${escapeHtml(guide)}</div>
       <div class="reco-why">${escapeHtml(care)}</div>`;
+    const pw = box.querySelector("#reco-perweek");
+    if (pw) pw.addEventListener("change", () => { try{ localStorage.setItem("lb_sessions_per_week", pw.value); }catch(e){} renderReco(); });
     box.querySelectorAll(".reco-track").forEach(b => b.addEventListener("click", () => { recoTrack = b.dataset.track; renderReco(); }));
     box.querySelectorAll(".reco-chip").forEach(b => b.addEventListener("click", () => {
       const ex = exerciseByName[b.dataset.ex];
