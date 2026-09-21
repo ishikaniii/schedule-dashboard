@@ -205,7 +205,11 @@
   .sync-now-btn{ border:1px solid var(--border); background:var(--surface); color:var(--ink); border-radius:999px; padding:7px 14px; font-size:12.5px; cursor:pointer; }
   .sync-now-btn:disabled{ opacity:.6; cursor:default; }
   .reco{ border:1px solid var(--border); background:var(--surface-2); border-radius:10px; padding:10px 12px; margin:4px 0 14px; font-size:13px; }
-  .reco .reco-title{ font-weight:600; margin-bottom:4px; }
+  .reco > summary{ cursor:pointer; font-weight:600; list-style:none; display:flex; align-items:center; gap:6px; }
+  .reco > summary::-webkit-details-marker{ display:none; }
+  .reco > summary::before{ content:"▸"; display:inline-block; transition:transform .15s ease; color:var(--ink-dim); }
+  .reco[open] > summary::before{ transform:rotate(90deg); }
+  .reco > #reco-box{ margin-top:8px; }
   .reco .reco-why{ color:var(--ink-dim); font-size:12px; margin-bottom:8px; line-height:1.5; }
   .reco .reco-chips{ display:flex; flex-wrap:wrap; gap:6px; }
   .reco .reco-chip{ border:1px solid var(--strength); background:var(--strength-soft); color:var(--strength); border-radius:999px; padding:5px 12px; font-size:13px; cursor:pointer; }
@@ -702,7 +706,10 @@
     <div class="grid-2">
       <div class="card">
         <h2><span class="dot strength"></span>筋トレを記録</h2>
-        <div class="reco" id="reco-box"></div>
+        <details class="reco" id="reco-details">
+          <summary>今日のおすすめメニュー</summary>
+          <div id="reco-box"></div>
+        </details>
         <form id="form-strength">
           <div class="field"><label for="s-date">日付</label><input type="date" id="s-date" required></div>
           <div class="field">
@@ -753,6 +760,11 @@
         <h2><span class="dot cardio"></span>有酸素を記録</h2>
         <form id="form-cardio">
           <div class="field"><label for="c-date">日付</label><input type="date" id="c-date" required></div>
+          <div class="field">
+            <label for="c-exercise">種目</label>
+            <select id="c-exercise"></select>
+            <div class="last-hint" id="c-exercise-tip" style="margin:4px 0 0;"></div>
+          </div>
           <div class="row2">
             <div class="field"><label for="c-duration">時間(分)</label><input type="number" id="c-duration" step="1" min="1" required></div>
             <div class="field"><label for="c-distance">距離(km)</label><input type="number" id="c-distance" step="0.1" min="0" placeholder="任意"></div>
@@ -2612,6 +2624,14 @@
   //   どちらを勧めるかは、直近7日の日数が少ない方（同数ならパワー日＝新鮮な状態で）。
   //   ログの分類：爆発系 or 主種目で5回以下 → パワー、それ以外の6回以上 → 質量。
   let recoTrack = "auto";
+  // 開閉：状態は端末に覚えておく（初期は開く）
+  (function(){
+    const det = document.getElementById("reco-details");
+    if (!det) return;
+    let open = true; try{ open = localStorage.getItem("lb_reco_open") !== "0"; }catch(e){}
+    det.open = open;
+    det.addEventListener("toggle", () => { try{ localStorage.setItem("lb_reco_open", det.open ? "1" : "0"); }catch(e){} });
+  })();
   function renderReco(){
     const box = document.getElementById("reco-box");
     if (!box) return;
@@ -2735,8 +2755,7 @@
     }
     const care = "質量には、たんぱく質（体重×1.6〜2.2g/日が目安）・十分な食事量・睡眠（7時間以上）も欠かせません。";
     const tabBtn = (id, label) => `<button type="button" class="reco-track${track === id ? " active" : ""}" data-track="${id}">${label}${auto === id ? "（おすすめ）" : ""}</button>`;
-    box.innerHTML = `<div class="reco-title">今日のおすすめメニュー</div>
-      <div class="reco-week">${escapeHtml(weekLine)}<label class="reco-perweek">週<select id="reco-perweek">${[2,3,4,5,6].map(n => `<option value="${n}"${n === perWeek ? " selected" : ""}>${n}</option>`).join("")}</select>回</label></div>
+    box.innerHTML = `<div class="reco-week">${escapeHtml(weekLine)}<label class="reco-perweek">週<select id="reco-perweek">${[2,3,4,5,6].map(n => `<option value="${n}"${n === perWeek ? " selected" : ""}>${n}</option>`).join("")}</select>回</label></div>
       <div class="reco-tracks">${tabBtn("power", "速筋パワー日")}${tabBtn("mass", "質量日")}</div>
       <div class="reco-why"><b>${escapeHtml(title)}</b><br>${escapeHtml(why)}</div>
       <div class="reco-chips">${picks.filter(x => x[1]).map(([role, n]) =>
@@ -2865,18 +2884,59 @@
     btn.disabled = false;
   });
 
+  // ---- 有酸素の種目（2026-09-20） ----
+  // fast=true は速筋（Type II線維）にも効く高強度・爆発的な種目。持久系（ゆっくり長く）と使い分ける。
+  const CARDIO = [
+    { n: "ジョギング", tip: "会話できる強さで20〜40分。持久力と回復の土台づくりに。" },
+    { n: "ウォーキング", tip: "回復日や疲れが残る日に。早歩きで30〜60分。" },
+    { n: "ランニング（ペース走）", tip: "やや息が上がるペースで15〜30分。" },
+    { n: "インターバル走", fast: true, tip: "全力に近い速さ30秒〜1分＋ゆっくり1〜2分を6〜10本。速筋にも効く。" },
+    { n: "ダッシュ（スプリント）", fast: true, tip: "全力で10〜20秒×4〜8本、間は十分（1〜2分以上）に休む。ウォームアップを念入りに。" },
+    { n: "坂道ダッシュ", fast: true, tip: "10〜15秒の全力×5〜8本。歩いて戻る。脚の爆発力を鍛える。" },
+    { n: "縄跳び", fast: true, tip: "1分跳んで30秒休むを5〜10セット。足首・ふくらはぎ・リズム感に。" },
+    { n: "HIIT（高強度インターバル）", fast: true, tip: "20〜40秒全力＋10〜20秒休みを8〜12セット。週1〜2回まで。" },
+    { n: "エアロバイク", tip: "関節への負担が少ない。ゆっくり30分か、30秒全力×数本で強度を上げる。" },
+    { n: "自転車（ロード）", tip: "30〜90分。脚の疲労が残る日の有酸素にも。" },
+    { n: "水泳", tip: "全身運動で関節への負担が小さい。20〜40分。" },
+    { n: "ローイング", tip: "背中・脚・心肺を同時に。20分、またはインターバルで。" },
+    { n: "階段・ステップ", tip: "階段の上り下りを10〜20分。太もも・お尻に効く。" },
+    { n: "ハイキング・登山", tip: "長時間ゆっくり。脚力と持久力に。" },
+    { n: "ボクシング・シャドー", fast: true, tip: "3分×3ラウンド、間は1分。体を素早く動かす。" },
+    { n: "その他", tip: "" },
+  ];
+  const cSel = document.getElementById("c-exercise");
+  cSel.innerHTML = CARDIO.map(c => `<option value="${escapeHtml(c.n)}">${c.fast ? "⚡ " : ""}${escapeHtml(c.n)}</option>`).join("");
+  const cTip = document.getElementById("c-exercise-tip");
+  const showCTip = () => { const c = CARDIO.find(x => x.n === cSel.value); cTip.textContent = c && c.tip ? (c.fast ? "⚡速筋にも効く：" : "") + c.tip : ""; };
+  cSel.addEventListener("change", showCTip); showCTip();
+  // 種目名：専用列 exercise、無ければメモ先頭の【種目】から（列が未作成の間の代替）
+  function cardioName(l){
+    if (l.exercise) return l.exercise;
+    const m = (l.note || "").match(/^【(.+?)】/);
+    return m ? m[1] : "有酸素";
+  }
+  const cardioNote = (l) => (l.note || "").replace(/^【.+?】\s*/, "");
+
   document.getElementById("form-cardio").addEventListener("submit", async (e) => {
     e.preventDefault();
     const btn = document.getElementById("c-submit"); btn.disabled = true;
     const distVal = document.getElementById("c-distance").value;
     const hrVal = document.getElementById("c-hr").value;
-    const { error } = await sb.from("cardio_logs").insert({
+    const cRow = {
       date: document.getElementById("c-date").value,
       duration_min: parseInt(document.getElementById("c-duration").value,10),
       distance_km: distVal ? parseFloat(distVal) : null,
       heart_rate: hrVal ? parseInt(hrVal,10) : null,
       note: document.getElementById("c-note").value.trim(),
-    });
+      exercise: cSel.value,
+    };
+    let { error } = await sb.from("cardio_logs").insert(cRow);
+    if (error && /exercise/.test(error.message || "")){
+      // exercise列がまだ無い場合は、メモの先頭に【種目】として保存（表示は同じように出る）
+      const { exercise, ...rest } = cRow;
+      rest.note = `【${exercise}】` + (rest.note ? " " + rest.note : "");
+      ({ error } = await sb.from("cardio_logs").insert(rest));
+    }
     if (error){ showBanner("記録に失敗しました: " + error.message); } else { document.getElementById("c-note").value=""; refetchCardio(); }
     btn.disabled = false;
   });
@@ -2891,7 +2951,7 @@
     list.innerHTML = merged.slice(0,15).map(l => {
       const desc = l.type === "strength"
         ? `<span class="dot strength" style="margin-right:6px;"></span>${escapeHtml(l.exercise)} ${l.weight_kg}kg × ${l.reps}回 × ${l.sets}セット（RPE ${l.rpe ?? "-"}）`
-        : `<span class="dot cardio" style="margin-right:6px;"></span>有酸素 ${l.duration_min}分${l.distance_km ? " / " + l.distance_km + "km" : ""}${l.heart_rate ? " / 平均" + l.heart_rate + "bpm" : ""}`;
+        : `<span class="dot cardio" style="margin-right:6px;"></span>${escapeHtml(cardioName(l))} ${l.duration_min}分${l.distance_km ? " / " + l.distance_km + "km" : ""}${l.heart_rate ? " / 平均" + l.heart_rate + "bpm" : ""}`;
       return `<li class="row"><span class="date mono">${l.date.slice(5)}</span><span class="desc">${desc}</span><button class="del" data-id="${l.id}" data-type="${l.type}">×</button></li>`;
     }).join("");
     list.querySelectorAll(".del").forEach(btn => btn.addEventListener("click", async () => {
@@ -2994,7 +3054,7 @@
     const items = document.getElementById("dd-items");
     items.innerHTML = "";
     sRows.forEach(l => { const d=document.createElement("div"); d.className="dd-item strength"; d.innerHTML = `${escapeHtml(l.exercise)} ${l.weight_kg}kg × ${l.reps}回 × ${l.sets}セット（RPE ${l.rpe??"-"}）` + (l.note?`<div class="note">${escapeHtml(l.note)}</div>`:""); items.appendChild(d); });
-    cRows.forEach(l => { const d=document.createElement("div"); d.className="dd-item cardio"; d.innerHTML = `有酸素 ${l.duration_min}分${l.distance_km?" / "+l.distance_km+"km":""}${l.heart_rate?" / 平均"+l.heart_rate+"bpm":""}` + (l.note?`<div class="note">${escapeHtml(l.note)}</div>`:""); items.appendChild(d); });
+    cRows.forEach(l => { const d=document.createElement("div"); d.className="dd-item cardio"; d.innerHTML = `${escapeHtml(cardioName(l))} ${l.duration_min}分${l.distance_km?" / "+l.distance_km+"km":""}${l.heart_rate?" / 平均"+l.heart_rate+"bpm":""}` + (cardioNote(l)?`<div class="note">${escapeHtml(cardioNote(l))}</div>`:""); items.appendChild(d); });
   }
 
 })();
