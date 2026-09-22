@@ -39,6 +39,13 @@
     ] },
   ];
 
+  // 洗髪日（2026-09-22追加）：縮毛矯正を長持ちさせるため、週3回（月・水・金）だけ表示する
+  // チェック項目。トレーニング（汗をかく日）とできるだけ重ならないよう、月水金は
+  // 「今日のおすすめ」（トレログ）が優先的に提案する曜日ではない前提だが、シフト等で
+  // 実際に運動と重なることはある——完全な自動回避はしておらず、目安として表示するのみ。
+  const HAIRWASH_DAYS = [1, 3, 5];   // 0=日,1=月,2=火,3=水,4=木,5=金,6=土
+  const isHairwashDay = (dstr) => HAIRWASH_DAYS.includes(new Date(dstr + "T00:00:00").getDay());
+
   // まず効果を試したい4つ（朝の光・起床時刻・夜の呼吸か瞑想・明日のToDo）。初期はこの4つだけ出し、
   // 「すべて表示」で16項目に広げる（2026-09-22）。ここに無い項目のチェック済みの記録は消えない。
   const CORE = ["light", "wake", "calm", "todo"];
@@ -82,6 +89,9 @@
         <div class="meal-daynav"><button type="button" id="hb-prev">‹</button><input type="date" id="hb-date"><button type="button" id="hb-next">›</button><button type="button" id="hb-today">今日</button></div>
         <div id="hb-notice" class="meal-notice" style="display:none;"></div>
         <div id="hb-progress" class="hb-progress"></div>
+        <div id="hb-hairwash" class="hb-hairwash" style="display:none;">
+          <label class="hb-item"><input type="checkbox" id="hb-hairwash-chk"><span>洗髪する日（縮毛矯正を長持ちさせるため。週3回・月水金の目安）<small>トレーニングと重なりそうな日は、無理に避けなくてもかまいません</small></span></label>
+        </div>
         <div id="hb-checklist"></div>
       </div>
       <div class="card hb-card">
@@ -173,6 +183,10 @@
         g.items.map(i => `<label class="hb-item"><input type="checkbox" data-k="${i[0]}"${checks[i[0]] ? " checked" : ""}><span>${esc(i[1])}${i[2] ? `<small>${esc(i[2])}</small>` : ""}</span></label>`).join("") + `</div>`).join("") +
         `<button type="button" id="hb-fulltoggle" style="margin-top:8px;background:none;border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:12px;color:var(--ink-dim);cursor:pointer;">${isFull() ? "4つだけ表示に戻す" : "すべて表示（全16項目）"}</button>`;
       $("hb-fulltoggle").onclick = () => { try { localStorage.setItem(FULL_KEY, isFull() ? "0" : "1"); } catch (e) { /* 保存不可 */ } render(); };
+      const hw = $("hb-hairwash");
+      hw.style.display = isHairwashDay(day) ? "block" : "none";
+      $("hb-hairwash-chk").checked = !!checks.hairwash;
+      $("hb-hairwash-chk").onchange = (e) => { const c = { ...(cur().checks || {}) }; c.hairwash = e.target.checked; save({ checks: c }); };
       $("hb-checklist").querySelectorAll("input[type=checkbox]").forEach(cb => cb.addEventListener("change", () => {
         const c = { ...(cur().checks || {}) }; c[cb.dataset.k] = cb.checked; save({ checks: c }); render();
       }));
