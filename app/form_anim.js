@@ -348,9 +348,10 @@
       A: A(0, 1, -2, 3, 3), B: A(0, 1, 6, 3, 3),
       labels: ["かかとを上げる（つま先立ち）", "ゆっくり下ろす"],
     },
+    // legZで、実際に脚が閉じる／開く動きを表す（2026-09-22、脚が左右に動いていなかった指摘で修正）。
     "アダクション": {
       mode: "root", root: [0, 0.55], cam: [0.2, 0.7, 3.6],
-      A: A(0, 80, -80, 150, 170), B: A(0, 95, -80, 150, 170),
+      A: A(0, 80, -80, 150, 170), B: A(0, 80, -80, 150, 170), legZ: [0.32, 0.05],
       labels: ["脚を閉じる（内ももを締める）", "ゆっくり開く"],
     },
     "ゴブレットスクワット": {
@@ -414,9 +415,10 @@
       A: A(-90, 90, 90, 90, 90), B: A(-88, 90, 90, 90, 90),
       labels: ["体を横に一直線にして持ち上げる（ドラッグで回転すると分かりやすい）", "キープする"],
     },
+    // twistYで、体全体をひねる動きを表す（2026-09-22、腕の角度をむりやり回す代用をやめた）。
     "ロシアンツイスト": {
       mode: "root", root: [0, 0.3], cam: [0, 0.6, 3.6],
-      A: A(-45, 60, -10, 80, 90), B: A(-45, 60, -10, 260, 90),
+      A: A(-45, 60, -10, 80, 90), B: A(-45, 60, -10, 80, 90), twistY: [-34, 34],
       labels: ["体をひねって手を横へ振る（片側）", "反対側へ振る"],
     },
     "ヒップリフト": {
@@ -503,6 +505,7 @@
   function build(ex) {
     const g = S.group;
     while (g.children.length) g.remove(g.children[0]);
+    g.rotation.set(0, 0, 0);   // 前の種目がtwistYで回していた場合に備え、必ずリセットする
     S.dyn = [];
     const body = mat(0xd9cfc0), dark = mat(0xb5a998), joint = mat(0x8f8576), gearMat = mat(0x3a3f4a, 0.4), plateMat = new THREE.MeshStandardMaterial({ color: 0x2c313b, roughness: 0.5, transparent: true, opacity: 0.38, depthWrite: false }), benchMat = mat(0x6f7684, 0.7);
     const V = (p, z) => new THREE.Vector3(p[0], p[1], z || 0);
@@ -574,10 +577,14 @@
     // という指摘で発覚）。カメラが斜め視点になったことで、z方向の動きが画面上で
     // 「横に開く」ように見えるようになった。
     const gz = ex.latZ ? (ex.latZ[0] + (ex.latZ[1] - ex.latZ[0]) * k) : (ex.gz != null ? ex.gz : zs);
+    // legZ（2026-09-22追加）：アダクション等、脚を閉じたり開いたりする種目のための、
+    // 膝から下（膝・足首・つま先）の奥行き(z)。股関節の幅(zh)はそのまま（骨盤の幅）、
+    // 脚だけが閉じる／開くように見せる。無い種目は今までどおり zh（固定）。
+    const legZ = ex.legZ ? (ex.legZ[0] + (ex.legZ[1] - ex.legZ[0]) * k) : zh;
     const P = {}; for (const p of S.parts.limbs) P[p.name] = p.mesh; for (const p of S.parts.spheres) P[p.name] = p.mesh; for (const p of S.parts.hands) P[p.name] = p.mesh;
     const dirT = new THREE.Vector2(...up(q.t));
     for (const s of [1, -1]) {
-      const hip = V3(j.hip, s * zh), knee = V3(j.knee, s * zh), ankle = V3(j.ankle, s * zh), toe = V3([j.ankle[0] + 0.22, j.ankle[1] - 0.075], s * zh);
+      const hip = V3(j.hip, s * zh), knee = V3(j.knee, s * legZ), ankle = V3(j.ankle, s * legZ), toe = V3([j.ankle[0] + 0.22, j.ankle[1] - 0.075], s * legZ);
       const sh = V3(j.sh, s * zs), el = V3(j.el, s * (zs + gz) / 2), wr = V3(j.wr, s * gz);
       setLimb(P["thigh" + s], hip, knee); setLimb(P["shin" + s], knee, ankle); setLimb(P["foot" + s], ankle, toe);
       setLimb(P["ua" + s], sh, el); setLimb(P["fa" + s], el, wr);
@@ -612,6 +619,10 @@
         d.mesh.position.set(j.sh[0] - 0.05, j.sh[1] - 0.24, 0);
       }
     }
+    // twistY（2026-09-22追加）：ロシアンツイスト等、体をひねる種目のための、体全体のY軸回転。
+    // このrigは左右対称にしか腕・脚を描けない（手を片側だけに振る動きができない）ため、
+    // 体全体を回すことで「ひねり」を表す代用（脚・骨盤も一緒に回ってしまうのは近似）。
+    S.group.rotation.y = ex.twistY ? (ex.twistY[0] + (ex.twistY[1] - ex.twistY[0]) * k) * D : 0;
     return j;
   }
   const V3 = (p, z) => new THREE.Vector3(p[0], p[1], z || 0);
