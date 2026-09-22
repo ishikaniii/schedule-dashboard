@@ -466,7 +466,9 @@
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(4, 2.4), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.06 }));
     floor.rotation.x = -Math.PI / 2; scene.add(floor);
 
-    S = { container, renderer, scene, camera, group, W, H, yaw: 0, dragging: false, raf: 0, ex: null, parts: null, dyn: [] };
+    // 初期の向きは真横(0)ではなく斜め45度にする（2026-09-22）。真横だと、左右の腕・脚が
+    // 重なって見え、体の向き・奥行きが分かりにくいという指摘があったため。
+    S = { container, renderer, scene, camera, group, W, H, yaw: -0.78, dragging: false, raf: 0, ex: null, parts: null, dyn: [] };
     const el = renderer.domElement;
     el.style.touchAction = "pan-y"; el.style.cursor = "grab";
     let lx = 0;
@@ -557,11 +559,11 @@
   function update(ex, k) {
     const { q, j } = pose(ex, k);
     const zh = S.zHip, zs = S.zSh;
+    const gz = ex.gz != null ? ex.gz : zs;                       // 手を置く幅（バーの握り幅）。ダンベル等の器具も必ずこれに合わせる
     const P = {}; for (const p of S.parts.limbs) P[p.name] = p.mesh; for (const p of S.parts.spheres) P[p.name] = p.mesh;
     const dirT = new THREE.Vector2(...up(q.t));
     for (const s of [1, -1]) {
       const hip = V3(j.hip, s * zh), knee = V3(j.knee, s * zh), ankle = V3(j.ankle, s * zh), toe = V3([j.ankle[0] + 0.22, j.ankle[1] - 0.075], s * zh);
-      const gz = S.ex.gz != null ? S.ex.gz : zs;                 // 手を置く幅（バーの握り幅）
       const sh = V3(j.sh, s * zs), el = V3(j.el, s * (zs + gz) / 2), wr = V3(j.wr, s * gz);
       setLimb(P["thigh" + s], hip, knee); setLimb(P["shin" + s], knee, ankle); setLimb(P["foot" + s], ankle, toe);
       setLimb(P["ua" + s], sh, el); setLimb(P["fa" + s], el, wr);
@@ -582,7 +584,9 @@
         const o = e.off || [0, 0];
         d.mesh.position.set(p[0] + o[0], p[1] + o[1], 0);
       } else if (e.t === "db") {
-        d.mesh.position.set(j.wr[0], j.wr[1], d.side * zs);
+        // 手の位置（wr）と同じ奥行き(gz)に置く。zs（肩幅）で固定していたため、
+        // gzを変えた種目（フライ系・リストカール等）でダンベルと手がずれていた（2026-09-22発覚）。
+        d.mesh.position.set(j.wr[0], j.wr[1], d.side * gz);
       } else if (e.t === "line") {
         const a = V3(j.wr, 0), b = new THREE.Vector3(e.to[0], e.to[1], 0);
         setLimb(d.mesh, a, b);
