@@ -164,15 +164,18 @@
       labels: ["腕を開く（肘は軽く曲げたまま）", "閉じる（胸の上へ）"],
       equip: [{ t: "db", at: "wr" }, { t: "box", x0: -0.85, x1: 0.12, y0: 0, y1: 0.36 }],
     },
+    // チェストプレス／ペックフライ／シーテッドロウは、座って「前へ」押す・引く種目なのに、
+    // b1/b2が170超（真上）になっていて、腕が上を向いていた（2026-09-22発覚。腕立て伏せと
+    // 同じ間違い）。座位で前へ伸ばす腕は、90前後（＝前方向）にする。
     "チェストプレス": {
       mode: "root", root: [0, 0.75], cam: [0, 1.05, 3.6],
-      A: A(0, 0, 0, 170, 175), B: A(0, 0, 0, 95, 170), gz: 0.28,
-      labels: ["ゆっくり戻す", "前へ押し出す"],
+      A: A(0, 0, 0, 110, 150), B: A(0, 0, 0, 90, 90), gz: 0.28,
+      labels: ["前へ押し出す", "ゆっくり戻す"],
       equip: [{ t: "bar", at: "wr", r: 0 }, { t: "box", x0: -0.3, x1: 0.2, y0: 0, y1: 0.75 }],
     },
     "ペックフライ": {
       mode: "root", root: [0, 0.75], cam: [0, 1.05, 3.6],
-      A: A(0, 0, 0, 140, 178), B: A(0, 0, 0, 70, 178), latZ: [0.16, 0.55],
+      A: A(0, 0, 0, 90, 175), B: A(0, 0, 0, 100, 170), latZ: [0.16, 0.55],
       labels: ["腕を開く", "胸の前で閉じる"],
       equip: [{ t: "line", from: "wr", to: [0, 1.5] }, { t: "box", x0: -0.3, x1: 0.2, y0: 0, y1: 0.75 }],
     },
@@ -208,7 +211,7 @@
     },
     "シーテッドロウ": {
       mode: "root", root: [0, 0.6], cam: [0, 0.95, 3.8],
-      A: A(15, 0, 0, 175, 175), B: A(-5, 0, 0, 10, 80), gz: 0.3,
+      A: A(15, 0, 0, 90, 90), B: A(-5, 0, 0, -5, 75), gz: 0.3,
       labels: ["肘を後ろへ引く（胸を張る）", "ゆっくり戻す（背中を伸ばす）"],
       equip: [{ t: "line", from: "wr", to: [1.6, 0.55] }, { t: "bar", at: "wr", r: 0 }],
     },
@@ -545,7 +548,11 @@
       } else if (e.t === "boxAtShoulder") {
         const b = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.42, 0.4), benchMat); g.add(b); S.dyn.push({ e, mesh: b });
       } else if (e.t === "bar") {
-        const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 1.3, 10), gearMat); bar.rotation.x = Math.PI / 2;
+        // バーの長さは握り幅(gz)に合わせる（2026-09-22修正）。固定長(1.3)だと、握り幅が
+        // 狭い種目（シーテッドロウ等）で、手より外側の部分が体を突き抜けて見えていた。
+        const gzForBar = ex.gz != null ? ex.gz : zSh;
+        const barLen = Math.max(0.55, gzForBar * 2 + 0.3);
+        const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, barLen, 10), gearMat); bar.rotation.x = Math.PI / 2;
         // 手が握る位置(gz)より外側まで棒を伸ばす（手が棒に触れて見えるように）
         const holder = new THREE.Group(); holder.add(bar);
         if (e.r > 0) for (const z of [0.5, -0.5]) {
