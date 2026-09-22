@@ -505,15 +505,20 @@
     const V = (p, z) => new THREE.Vector3(p[0], p[1], z || 0);
 
     // 体のパーツ（near=手前側 z>0、far=奥側 z<0 は少し暗く）
-    const parts = { limbs: [], spheres: [] };
+    const parts = { limbs: [], spheres: [], hands: [] };
     const mkLimb = (name, r, m) => { const mesh = limbMesh(r, m); g.add(mesh); parts.limbs.push({ name, mesh }); return mesh; };
     const mkSph = (name, r, m) => { const mesh = new THREE.Mesh(new THREE.SphereGeometry(r, 16, 12), m); g.add(mesh); parts.spheres.push({ name, mesh }); return mesh; };
+    // 手（2026-09-22追加）：手首の球だけだと、どちらを向いて握っているか分かりにくいという
+    // 指摘があったため、前腕の延長に小さな板（手のひら〜指）を足す。バー/ダンベルを握る
+    // 種目は、この板がバーの向き（z軸）に沿うようにして、握っている向きが伝わるようにする。
+    const mkHand = (name, m) => { const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.05, 0.085), m); g.add(mesh); parts.hands.push({ name, mesh }); return mesh; };
     const zHip = 0.1, zSh = 0.19;
     for (const s of [1, -1]) {
       const m = s > 0 ? body : dark;
       mkLimb("thigh" + s, 0.075, m); mkLimb("shin" + s, 0.058, m); mkLimb("foot" + s, 0.045, m);
       mkLimb("ua" + s, 0.048, m); mkLimb("fa" + s, 0.04, m);
-      mkSph("knee" + s, 0.06, joint); mkSph("ankle" + s, 0.05, joint); mkSph("el" + s, 0.048, joint); mkSph("wr" + s, 0.04, joint); mkSph("sh" + s, 0.07, joint);
+      mkSph("knee" + s, 0.06, joint); mkSph("ankle" + s, 0.05, joint); mkSph("el" + s, 0.048, joint); mkSph("wr" + s, 0.032, joint); mkSph("sh" + s, 0.07, joint);
+      mkHand("hand" + s, m);
     }
     mkLimb("torso", 0.125, body); mkSph("head", 0.105, body); mkLimb("neck", 0.045, body); mkLimb("pelvis", 0.1, body);
     S.parts = parts; S.zHip = zHip; S.zSh = zSh;
@@ -560,7 +565,7 @@
     const { q, j } = pose(ex, k);
     const zh = S.zHip, zs = S.zSh;
     const gz = ex.gz != null ? ex.gz : zs;                       // 手を置く幅（バーの握り幅）。ダンベル等の器具も必ずこれに合わせる
-    const P = {}; for (const p of S.parts.limbs) P[p.name] = p.mesh; for (const p of S.parts.spheres) P[p.name] = p.mesh;
+    const P = {}; for (const p of S.parts.limbs) P[p.name] = p.mesh; for (const p of S.parts.spheres) P[p.name] = p.mesh; for (const p of S.parts.hands) P[p.name] = p.mesh;
     const dirT = new THREE.Vector2(...up(q.t));
     for (const s of [1, -1]) {
       const hip = V3(j.hip, s * zh), knee = V3(j.knee, s * zh), ankle = V3(j.ankle, s * zh), toe = V3([j.ankle[0] + 0.22, j.ankle[1] - 0.075], s * zh);
@@ -569,6 +574,10 @@
       setLimb(P["ua" + s], sh, el); setLimb(P["fa" + s], el, wr);
       P["knee" + s].position.copy(knee); P["ankle" + s].position.copy(ankle);
       P["el" + s].position.copy(el); P["wr" + s].position.copy(wr); P["sh" + s].position.copy(sh);
+      // 手：前腕の延長に小さな板を置き、握っている向き（前腕の実際の3D方向）に合わせて回転させる。
+      const fdir = new THREE.Vector3().subVectors(wr, el).normalize();
+      P["hand" + s].position.copy(wr).addScaledVector(fdir, 0.075);
+      P["hand" + s].quaternion.setFromUnitVectors(new THREE.Vector3(1, 0, 0), fdir);
     }
     const hipC = V3(j.hip, 0), shC = V3(j.sh, 0);
     setLimb(P.torso, hipC, shC);
