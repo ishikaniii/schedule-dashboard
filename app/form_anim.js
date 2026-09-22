@@ -50,15 +50,19 @@
 
   // 位置合わせ：mode
   //   ankle : 足首を x=0、足裏を床(y=0)に固定（立つ・しゃがむ系）
-  //   root  : 骨盤を固定点に置く（寝る・座る系）
+  //   root  : 骨盤を固定点に置く（寝る・座る系）。rootBがあれば、A→B間で骨盤の高さも動かす
+  //           （腕立て伏せ等、体を支える手は床のまま体が上下する種目のため。2026-09-22追加）
   //   hands : 手首を固定点に置く（懸垂）
-  function place(ex, j) {
+  function place(ex, j, k) {
     let off;
-    if (ex.mode === "root") off = ex.root;
+    if (ex.mode === "root") {
+      const r0 = ex.root, r1 = ex.rootB || ex.root;
+      off = [r0[0] + (r1[0] - r0[0]) * k, r0[1] + (r1[1] - r0[1]) * k];
+    }
     else if (ex.mode === "hands") off = [ex.hands[0] - j.wr[0], ex.hands[1] - j.wr[1]];
     else off = [-j.ankle[0], 0.08 - j.ankle[1]];
     const o = {};
-    for (const k in j) o[k] = [j[k][0] + off[0], j[k][1] + off[1]];
+    for (const k2 in j) o[k2] = [j[k2][0] + off[0], j[k2][1] + off[1]];
     return o;
   }
 
@@ -180,14 +184,18 @@
     },
     // 注：a1/a2は「真下=0」の絶対角なので、うつ伏せ（胴体が水平）の種目は
     // 脚をa1=90（水平・胴体と一直線）にしないと、脚が地面の下に潜って見える。
+    // 同じ理由で、腕もb1/b2を0付近（真下＝床の方向）にしないと、手が体の上（宙）に
+    // 浮いてしまう（2026-09-22発覚：腕が真上を向き、体の向きがおかしく見えていた）。
+    // 床につく手はrootBでは動かせないので、rootB（骨盤の高さ）を下げることで、
+    // 「手は床のまま、体（胸）が沈む」動きを表す。
     "腕立て伏せ": {
-      mode: "root", root: [0, 0.12], cam: [0, 0.5, 3.4],
-      A: A(-90, 90, 90, 175, 175), B: A(-90, 90, 90, 90, 170), gz: 0.3,
+      mode: "root", root: [0, 0.56], rootB: [0, 0.33], cam: [0, 0.42, 3.4],
+      A: A(-90, 90, 90, 5, 8), B: A(-90, 90, 90, 30, 60), gz: 0.3,
       labels: ["肘を曲げて胸を沈める（体は一直線）", "押し上げる"],
     },
     "クラッププッシュアップ": {
-      mode: "root", root: [0, 0.12], cam: [0, 0.5, 3.4],
-      A: A(-90, 90, 90, 175, 175), B: A(-90, 90, 90, 85, 165), gz: 0.3,
+      mode: "root", root: [0, 0.56], rootB: [0, 0.30], cam: [0, 0.42, 3.4],
+      A: A(-90, 90, 90, 5, 8), B: A(-90, 90, 90, 35, 70), gz: 0.3,
       labels: ["肘を曲げて沈める（勢いをためる）", "一気に押し上げる（手が浮くくらい）"],
     },
 
@@ -564,7 +572,7 @@
 
   function pose(ex, k) {
     const q = lerpQ(ex.A, ex.B, k);
-    return { q, j: place(ex, joints(q, ex)) };
+    return { q, j: place(ex, joints(q, ex), k) };
   }
 
   function update(ex, k) {
