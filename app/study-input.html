@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>学習の記録・設定 - LifeBase</title>
+<style>
+  :root{ color-scheme:light dark; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px); }
+  :root{ --bg:#f2f3f6; --surface:#ffffff; --ink:#1b1d22; --ink-dim:#6b7078; --border:#e2e4ea; --accent:#5b3fae; --good:#2f8f5b; --strength:#b23a3a; }
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ --bg:#14161b; --surface:#1c1f26; --ink:#eceef2; --ink-dim:#9aa0ab; --border:#2c303a; --accent:#9d8bdc; --good:#5fbf8a; --strength:#e08080; } }
+  :root[data-theme="dark"]{ --bg:#14161b; --surface:#1c1f26; --ink:#eceef2; --ink-dim:#9aa0ab; --border:#2c303a; --accent:#9d8bdc; --good:#5fbf8a; --strength:#e08080; }
+  *{ box-sizing:border-box; }
+  body{ margin:0; background:var(--bg); color:var(--ink); font-family:"Hiragino Sans","Yu Gothic",sans-serif; font-size:14px; padding:18px 16px 40px; }
+  img{ max-width:100%; } [hidden]{ display:none!important; }
+  h1{ font-size:17px; margin:0 0 2px; } .sub{ color:var(--ink-dim); font-size:12px; margin:0 0 16px; }
+  a.back{ display:inline-block; margin-bottom:14px; color:var(--accent); font-size:13px; text-decoration:none; }
+  .card{ background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:16px; margin-bottom:14px; }
+  .card h2{ font-size:14px; margin:0 0 10px; }
+  label{ display:block; font-size:12.5px; color:var(--ink-dim); margin-bottom:10px; }
+  input,select,textarea{ width:100%; margin-top:4px; padding:9px 10px; border:1px solid var(--border); border-radius:9px; background:var(--bg); color:var(--ink); font-size:14px; font-family:inherit; }
+  textarea{ resize:vertical; }
+  .row2{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  button.primary{ width:100%; border:none; border-radius:9px; padding:11px; background:var(--accent); color:#fff; font-size:14px; font-weight:600; cursor:pointer; }
+  button.primary:disabled{ opacity:.5; cursor:not-allowed; }
+  .hint{ font-size:11.5px; color:var(--ink-dim); margin-top:8px; line-height:1.5; }
+  .notice{ background:color-mix(in srgb, var(--strength) 14%, var(--surface)); border:1px solid var(--strength); border-radius:9px; padding:8px 10px; font-size:12px; margin-bottom:10px; }
+  .ok{ background:color-mix(in srgb, var(--good) 14%, var(--surface)); border:1px solid var(--good); border-radius:9px; padding:8px 10px; font-size:12.5px; margin-top:8px; }
+  .area{ display:flex; align-items:center; justify-content:space-between; gap:8px; padding:7px 0; border-bottom:1px solid var(--border); font-size:13px; }
+  .area:last-child{ border-bottom:none; }
+  .area label{ display:flex; align-items:center; gap:4px; margin:0; font-size:12px; }
+  #gate{ position:fixed; inset:0; background:var(--bg); display:flex; align-items:center; justify-content:center; z-index:50; }
+  #gate .box{ width:min(320px,90vw); text-align:center; }
+  #gate input{ text-align:center; letter-spacing:.1em; }
+  #app{ display:none; } #app.show{ display:block; }
+</style>
+</head>
+<body>
+<div id="gate"><div class="box">
+  <h1>LIFEBASE</h1><p class="sub">学習の記録・設定</p>
+  <input type="password" id="gate-input" placeholder="パスコード" autocomplete="off">
+  <button type="button" id="gate-submit" class="primary" style="margin-top:8px;">開く</button>
+  <p class="hint" id="gate-err" style="color:var(--strength);"></p>
+</div></div>
+
+<div id="app">
+  <a class="back" href="index.html#study">← 学習タブに戻る</a>
+  <h1>学習の記録・設定</h1>
+  <p class="sub">ここで記録・設定したものは、学習タブに反映されます。復習そのものは、別の復習ページで行います。</p>
+
+  <div class="card">
+    <h2>学習の時間を記録</h2>
+    <div class="row2">
+      <label>科目・分野<input type="text" id="st-subject" list="st-subjects" placeholder="例：経済学 / FP"></label>
+      <label>種類<select id="st-kind"><option>講義</option><option>FP</option><option>読書</option><option>その他</option></select></label>
+    </div>
+    <datalist id="st-subjects"></datalist>
+    <label>内容・範囲<input type="text" id="st-title" maxlength="80" placeholder="例：第5回 需要と供給の弾力性／第2章 ライフプラン"></label>
+    <label>学習時間(分)<input type="number" id="st-min" min="0" step="5" placeholder="例 30"></label>
+    <button type="button" id="st-add" class="primary">記録する</button>
+    <div id="st-ok"></div>
+  </div>
+
+  <div class="card">
+    <h2>最近の記録（削除）</h2>
+    <ul id="st-list" style="list-style:none;margin:0;padding:0;font-size:13px;"></ul>
+  </div>
+
+  <div class="card">
+    <h2>FP3級の設定</h2>
+    <div class="row2">
+      <label>受検予定日<input type="date" id="fp-date"></label>
+      <label>目標の学習時間(h)<input type="number" id="fp-target" min="10" step="10"></label>
+    </div>
+    <div id="fp-areas"></div>
+    <div class="hint">受検日は未定でもかまいません。分野のチェックは、この端末に保存されます。</div>
+  </div>
+
+  <div class="card">
+    <h2>ノート・教材からカードを作る</h2>
+    <div id="ib-notice"></div>
+    <div class="row2">
+      <label>科目<input type="text" id="ib-subject" list="st-subjects" placeholder="例：FP3級 / 経済学"></label>
+      <label>題名（省略可）<input type="text" id="ib-title" maxlength="60" placeholder="例：第2章 ライフプラン"></label>
+    </div>
+    <label>自分の要点メモ<textarea id="ib-text" rows="6" maxlength="20000" placeholder="学んだことを、自分の言葉でまとめたメモを貼ってください"></textarea></label>
+    <button type="button" id="ib-send" class="primary">送る</button>
+    <div id="ib-ok"></div>
+    <div class="hint">送ると、PCがGemini（無料枠）で要約・用語・練習問題・復習カードを作ります（約30分以内、状況は学習タブで確認できます）。<b>教科書や過去問の文章をそのまま貼らず、自分の要点メモにしてください。</b>FPなど資格の内容は、AIが間違えることがあるので、公式教材で確認してください。メモはGoogleに送られます。</div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+(function(){
+  "use strict";
+  const SUPABASE_URL = "https://wjdfpoawlnksvieztsyq.supabase.co";
+  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndqZGZwb2F3bG5rc3ZpZXp0c3lxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk3NTU2MzAsImV4cCI6MjEwNTMzMTYzMH0.aC6B74fkt5l9iC1y57RuJ834Claluc0phwJ3Fyk-S50";
+  const PASSCODE_HASH_HEX = "d953f2f2ae6d9853c5a03fbd45e167f4e5e65de669ff7d12d6d170efa8e8cb0a".slice(0,64);
+  const AUTH_STORAGE_KEY = "sk_app_auth_ok";
+  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => (s == null ? "" : String(s)).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+  const ls = { get(k,d){ try{ const v=localStorage.getItem(k); return v==null?d:v; }catch(e){ return d; } }, set(k,v){ try{ localStorage.setItem(k,v); }catch(e){} } };
+  const FP_AREAS = ["ライフプランニングと資金計画","リスク管理","金融資産運用","タックスプランニング","不動産","相続・事業承継"];
+
+  async function sha256Hex(text){ const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)); return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,"0")).join(""); }
+  function openApp(){ $("gate").style.display="none"; $("app").classList.add("show"); initApp(); }
+  document.getElementById("gate-submit").addEventListener("click", tryUnlock);
+  $("gate-input").addEventListener("keydown", e => { if (e.key === "Enter") tryUnlock(); });
+  async function tryUnlock(){
+    const hash = await sha256Hex($("gate-input").value.trim());
+    if (hash === PASSCODE_HASH_HEX){ try{ localStorage.setItem(AUTH_STORAGE_KEY, hash); }catch(e){} openApp(); }
+    else { $("gate-err").textContent = "パスコードが違います"; $("gate-input").value = ""; }
+  }
+  (function checkStoredAuth(){ let stored=null; try{ stored=localStorage.getItem(AUTH_STORAGE_KEY); }catch(e){} if (stored===PASSCODE_HASH_HEX) openApp(); })();
+
+  function initApp(){
+    $("st-subjects").innerHTML = `<option>経済学</option><option>FP3級</option>${FP_AREAS.map(a=>`<option>FP：${esc(a)}</option>`).join("")}`;
+
+    // ---------- 学習の時間を記録 ----------
+    async function loadList(){
+      const { data, error } = await sb.from("study_items").select("*").order("created_at",{ascending:false}).limit(15);
+      const el = $("st-list");
+      if (error){ el.innerHTML = '<li style="color:var(--ink-dim);">まだ準備ができていません（Supabaseで study_items のSQLを実行してください）。</li>'; return; }
+      el.innerHTML = (data||[]).map(it => `<li style="display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);">
+        <span style="color:var(--ink-dim);font-family:monospace;">${esc(String(it.date).slice(5))}</span>
+        <span style="flex:1;">${esc(it.subject)}｜${esc(it.title)}${it.minutes?`（${it.minutes}分）`:""}</span>
+        <button type="button" data-id="${esc(it.id)}" style="background:none;border:none;color:var(--ink-dim);cursor:pointer;font-size:16px;">×</button></li>`).join("") || '<li style="color:var(--ink-dim);">まだ記録がありません。</li>';
+      el.querySelectorAll("button[data-id]").forEach(b => b.addEventListener("click", async () => { await sb.from("study_items").delete().eq("id", b.dataset.id); loadList(); }));
+    }
+    $("st-add").addEventListener("click", async () => {
+      const subject = $("st-subject").value.trim(), title = $("st-title").value.trim();
+      if (!subject || !title){ return; }
+      const btn = $("st-add"); btn.disabled = true;
+      const { error } = await sb.from("study_items").insert({ date: new Date().toISOString().slice(0,10), subject, title, kind: $("st-kind").value, minutes: $("st-min").value ? parseInt($("st-min").value,10) : null, done_steps: [] });
+      btn.disabled = false;
+      if (error){ $("st-ok").innerHTML = `<p class="hint" style="color:var(--strength);">保存に失敗しました: ${esc(error.message)}</p>`; return; }
+      $("st-title").value = ""; $("st-min").value = ""; $("st-ok").innerHTML = '<p class="ok">記録しました。</p>'; loadList();
+    });
+
+    // ---------- FP設定 ----------
+    const fpLoad = () => { try{ return JSON.parse(ls.get("lb_fp","{}")); }catch(e){ return {}; } };
+    function fpRender(){
+      const f = fpLoad();
+      $("fp-date").value = f.date || ""; $("fp-target").value = f.target || 100;
+      const a = f.areas || {};
+      $("fp-areas").innerHTML = FP_AREAS.map((n,i) => `<div class="area"><span>${esc(n)}</span><label><input type="checkbox" data-a="${i}" data-k="read"${a[i]&&a[i].read?" checked":""}> 読了</label><label><input type="checkbox" data-a="${i}" data-k="drill"${a[i]&&a[i].drill?" checked":""}> 問題演習</label></div>`).join("");
+      $("fp-areas").querySelectorAll("input").forEach(cb => cb.addEventListener("change", () => { const g=fpLoad(); g.areas=g.areas||{}; g.areas[cb.dataset.a]=g.areas[cb.dataset.a]||{}; g.areas[cb.dataset.a][cb.dataset.k]=cb.checked; ls.set("lb_fp", JSON.stringify(g)); }));
+    }
+    const fpSave = () => { const g = fpLoad(); g.date = $("fp-date").value; g.target = parseInt($("fp-target").value,10) || 100; ls.set("lb_fp", JSON.stringify(g)); };
+    $("fp-date").addEventListener("change", fpSave); $("fp-target").addEventListener("change", fpSave);
+    fpRender();
+
+    // ---------- ノート受信箱 ----------
+    sb.from("study_inbox").select("id",{count:"exact",head:true}).then(({error}) => {
+      if (error) { $("ib-notice").innerHTML = '<div class="notice">まだ準備ができていません。Supabaseで schema.sql の「学習の受信箱」のSQLを実行してください。</div>'; $("ib-send").disabled = true; }
+    });
+    $("ib-send").addEventListener("click", async () => {
+      const subject = $("ib-subject").value.trim(), text = $("ib-text").value.trim();
+      if (!subject || text.length < 30){ $("ib-ok").innerHTML = '<p class="hint" style="color:var(--strength);">科目と、30文字以上のメモを入れてください。</p>'; return; }
+      const btn = $("ib-send"); btn.disabled = true; btn.textContent = "送っています…";
+      const { error } = await sb.from("study_inbox").insert({ subject, title: $("ib-title").value.trim() || null, text });
+      btn.disabled = false; btn.textContent = "送る";
+      if (error){ $("ib-ok").innerHTML = `<p class="hint" style="color:var(--strength);">送信に失敗しました: ${esc(error.message)}</p>`; return; }
+      $("ib-subject").value = ""; $("ib-title").value = ""; $("ib-text").value = "";
+      $("ib-ok").innerHTML = '<p class="ok">送りました。学習タブの「ノート・教材」欄で、状況を確認できます。</p>';
+    });
+
+    loadList();
+  }
+})();
+</script>
+</body>
+</html>
