@@ -81,6 +81,15 @@
           items.push({ key, level: 1, sort: today + (e.start_time || ""), label: title, badge: e.start_time ? e.start_time + "〜" : "今日", kind: "運動", auto: true });
         }
       }
+      // 試験勉強（studyplan.js）。7日前から。前日・当日は必須。今日の分をチェックすると消える。
+      if (global.LifeStudyPlan) {
+        for (const u of LifeStudyPlan.upcoming(evs, today)) {
+          if (u.kind !== "exam" || u.left > 7) continue;
+          const key = "ex:" + u.id + ":" + today;
+          if (checks.has(key)) continue;
+          items.push({ key, level: u.left <= 1 ? 0 : 1, sort: u.date, label: `試験勉強：${u.title}（今日${u.minutes}分）`, badge: u.left === 0 ? "今日" : `あと${u.left}日`, kind: "学習" });
+        }
+      }
       for (const t of userTasks) {
         const due = t.due_date || null;
         if (due && due > in3) continue;                          // 遠い期限はまだ出さない

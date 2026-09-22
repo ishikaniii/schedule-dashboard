@@ -99,7 +99,7 @@
   // ---------- 復習セッション ----------
   let queue = [], idx = 0, stats = { ok: 0, mid: 0, ng: 0 }, missing = false, aiText = null, startTotal = 0;
   async function loadDue(){
-    const { data, error } = await sb.from("study_cards").select("*").lte("next_review", today).order("next_review", { ascending: true }).limit(60);
+    const { data, error } = await sb.from("study_cards").select("*").lte("next_review", today).order("next_review", { ascending: true }).order("lapses", { ascending: false }).limit(60);
     if (error){ missing = /study_cards|relation|schema cache/i.test(error.message || ""); queue = []; return; }
     missing = false; queue = (data || []).sort(() => Math.random() - 0.5); startTotal = queue.length; idx = 0;
   }
