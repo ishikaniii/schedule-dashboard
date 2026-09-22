@@ -2769,7 +2769,7 @@
     box.style.display = "block";
     // 実際の動画（YouTube検索）へのリンクは全種目に付ける
     document.getElementById("form-video").href = "https://www.youtube.com/results?search_query=" + encodeURIComponent(name + " やり方 フォーム");
-    // 簡易3Dアニメ（主な種目のみ）。使わない場合は ANIM_ENABLED を false にすればリンクだけになる。
+    // 簡易3Dアニメ（2026-09-22、全59種目に対応）。使わない場合は ANIM_ENABLED を false にすればリンクだけになる。
     const wrap = document.getElementById("form-anim-wrap");
     if (ANIM_ENABLED && window.FormAnim && FormAnim.has(name)){
       wrap.style.display = "block";
