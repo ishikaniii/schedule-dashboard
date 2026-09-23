@@ -178,6 +178,8 @@
     font-size:11.5px; padding:5px 9px; border-radius:7px; cursor:pointer; text-align:left;
   }
   .ex-buttons button.active{ background:var(--strength-soft); border-color:var(--strength); color:var(--strength); font-weight:600; }
+  .ex-buttons .ex-bw{ display:inline-block; margin-left:4px; font-size:9px; color:var(--ink-dim); background:var(--surface-2); border-radius:5px; padding:1px 4px; vertical-align:middle; }
+  .ex-buttons button.active .ex-bw{ color:var(--strength); background:transparent; }
   .last-hint{ font-size:12px; color:var(--ink-dim); margin:-4px 0 10px; min-height:1.2em; }
   .last-hint button{
     border:none; background:var(--strength-soft); color:var(--strength); border-radius:6px;
@@ -2518,12 +2520,12 @@
     {n:"ダンベルフライ", part:"胸", p:["chest"], s:["delts_front"]},
     {n:"チェストプレス", part:"胸", p:["chest"], s:["triceps","delts_front"]},
     {n:"ペックフライ", part:"胸", p:["chest"], s:[]},
-    {n:"ディップス", part:"胸", p:["chest","triceps"], s:["delts_front"]},
-    {n:"腕立て伏せ", part:"胸", p:["chest"], s:["triceps","delts_front","abs"]},
+    {n:"ディップス", part:"胸", p:["chest","triceps"], s:["delts_front"], bw:true},
+    {n:"腕立て伏せ", part:"胸", p:["chest"], s:["triceps","delts_front","abs"], bw:true},
     // 背中
     {n:"デッドリフト", part:"背中", p:["lower_back","glutes","hamstrings"], s:["traps","lats","forearms"]},
     {n:"ラットプルダウン", part:"背中", p:["lats"], s:["biceps","traps"]},
-    {n:"懸垂", part:"背中", p:["lats"], s:["biceps","forearms"]},
+    {n:"懸垂", part:"背中", p:["lats"], s:["biceps","forearms"], bw:true},
     {n:"ベントオーバーロウ", part:"背中", p:["lats","traps"], s:["biceps","lower_back"]},
     {n:"ダンベルロウ", part:"背中", p:["lats"], s:["biceps","traps"]},
     {n:"シーテッドロウ", part:"背中", p:["lats","traps"], s:["biceps"]},
@@ -2554,29 +2556,29 @@
     {n:"レッグエクステンション", part:"脚", p:["quads"], s:[]},
     {n:"レッグカール", part:"脚", p:["hamstrings"], s:[]},
     {n:"ルーマニアンデッドリフト", part:"脚", p:["hamstrings","glutes"], s:["lower_back"]},
-    {n:"ランジ", part:"脚", p:["quads","glutes"], s:["hamstrings","adductors"]},
-    {n:"ブルガリアンスクワット", part:"脚", p:["quads","glutes"], s:["hamstrings"]},
+    {n:"ランジ", part:"脚", p:["quads","glutes"], s:["hamstrings","adductors"], bw:true},
+    {n:"ブルガリアンスクワット", part:"脚", p:["quads","glutes"], s:["hamstrings"], bw:true},
     {n:"ヒップスラスト", part:"脚", p:["glutes"], s:["hamstrings"]},
-    {n:"カーフレイズ", part:"脚", p:["calves"], s:[]},
+    {n:"カーフレイズ", part:"脚", p:["calves"], s:[], bw:true},
     {n:"アダクション", part:"脚", p:["adductors"], s:[]},
     // 体幹
-    {n:"プランク", part:"体幹", p:["abs"], s:["obliques","lower_back"]},
-    {n:"クランチ", part:"体幹", p:["abs"], s:[]},
-    {n:"レッグレイズ", part:"体幹", p:["abs"], s:["obliques"]},
+    {n:"プランク", part:"体幹", p:["abs"], s:["obliques","lower_back"], bw:true},
+    {n:"クランチ", part:"体幹", p:["abs"], s:[], bw:true},
+    {n:"レッグレイズ", part:"体幹", p:["abs"], s:["obliques"], bw:true},
     {n:"アブローラー", part:"体幹", p:["abs"], s:["lats","obliques"]},
-    {n:"サイドプランク", part:"体幹", p:["obliques"], s:["abs"]},
-    {n:"ロシアンツイスト", part:"体幹", p:["obliques"], s:["abs"]},
-    {n:"ヒップリフト", part:"体幹", p:["glutes"], s:["hamstrings","abs"]},
+    {n:"サイドプランク", part:"体幹", p:["obliques"], s:["abs"], bw:true},
+    {n:"ロシアンツイスト", part:"体幹", p:["obliques"], s:["abs"], bw:true},
+    {n:"ヒップリフト", part:"体幹", p:["glutes"], s:["hamstrings","abs"], bw:true},
     // 実用系（2026-09-20追加：筋肥大より「使える体」を優先する方針）
     {n:"ゴブレットスクワット", part:"脚", p:["quads","glutes"], s:["abs","hamstrings","adductors"]},
     {n:"ケトルベルスイング", part:"脚", p:["glutes","hamstrings"], s:["lower_back","abs","delts_front","forearms"]},
-    {n:"ステップアップ", part:"脚", p:["quads","glutes"], s:["hamstrings","calves"]},
+    {n:"ステップアップ", part:"脚", p:["quads","glutes"], s:["hamstrings","calves"], bw:true},
     {n:"ファーマーズウォーク", part:"体幹", p:["forearms","traps"], s:["abs","obliques","glutes","calves"]},
     {n:"パロフプレス", part:"体幹", p:["obliques","abs"], s:["delts_front","chest"]},
     // 速筋（爆発系・2026-09-20追加）
-    {n:"ジャンプスクワット", part:"脚", p:["quads","glutes"], s:["calves","hamstrings"]},
-    {n:"ボックスジャンプ", part:"脚", p:["quads","glutes"], s:["calves","hamstrings"]},
-    {n:"クラッププッシュアップ", part:"胸", p:["chest","triceps"], s:["delts_front","abs"]},
+    {n:"ジャンプスクワット", part:"脚", p:["quads","glutes"], s:["calves","hamstrings"], bw:true},
+    {n:"ボックスジャンプ", part:"脚", p:["quads","glutes"], s:["calves","hamstrings"], bw:true},
+    {n:"クラッププッシュアップ", part:"胸", p:["chest","triceps"], s:["delts_front","abs"], bw:true},
     {n:"メディシンボールスラム", part:"体幹", p:["abs","lats"], s:["delts_front","triceps","glutes"]},
   ];
 
@@ -2739,8 +2741,10 @@
   });
   function renderExerciseButtons(){
     const cur = document.getElementById("s-exercise").value.trim();
+    // 自重（器具が要らない）種目を上位に（2026-09-22、ユーザー要望）。同じ区分の中の順序は変えない。
     document.getElementById("ex-buttons").innerHTML = EXERCISES.filter(e => e.part === currentPart)
-      .map(e => `<button type="button" data-ex="${e.n}"${e.n===cur?' class="active"':''}>${e.n}</button>`).join("");
+      .map((e, i) => ({ e, i })).sort((a, b) => (b.e.bw ? 1 : 0) - (a.e.bw ? 1 : 0) || a.i - b.i).map(({ e }) => e)
+      .map(e => `<button type="button" data-ex="${e.n}"${e.n===cur?' class="active"':''}>${escapeHtml(e.n)}${e.bw ? '<small class="ex-bw">自重</small>' : ""}</button>`).join("");
   }
   document.getElementById("ex-buttons").addEventListener("click", (e) => {
     if (e.target.tagName !== "BUTTON") return;
