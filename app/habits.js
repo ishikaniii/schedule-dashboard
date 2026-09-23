@@ -129,7 +129,7 @@
       </div>
       <div class="card hb-card">
         <h2>ジャーナル<span class="tag">夜に3〜5分</span></h2>
-        <label class="hb-l">明日のToDo（具体的に。時刻・場所・やることまで）<textarea id="hb-todo" rows="3" placeholder="例：9:00 有機化学の課題を提出／17:00 スクワット3×5"></textarea></label>
+        <label class="hb-l">明日のToDo（具体的に。時刻・場所・やることまで。行や「／」で区切ると、翌日のタスクとしてホームにも出ます）<textarea id="hb-todo" rows="3" placeholder="例：9:00 有機化学の課題を提出／17:00 スクワット3×5"></textarea></label>
         <label class="hb-l">今日の感謝・良かったこと（3つ）<textarea id="hb-grat" rows="3"></textarea></label>
         <label class="hb-l">ふり返り（学び・気づき）<textarea id="hb-refl" rows="2"></textarea></label>
         <button type="button" id="hb-jsave" class="meal-primary">保存</button>
@@ -227,7 +227,25 @@
       await save({ read_title: $("hb-rtitle").value.trim(), read_min: $("hb-rmin").value === "" ? null : parseInt($("hb-rmin").value, 10), read_note: $("hb-rnote").value.trim() });
       $("hb-rstate").textContent = " 保存しました"; setTimeout(() => { $("hb-rstate").textContent = ""; }, 2500); render();
     });
-    $("hb-jsave").addEventListener("click", async () => { await save({ todo: $("hb-todo").value.trim(), gratitude: $("hb-grat").value.trim(), reflection: $("hb-refl").value.trim() }); $("hb-jstate").textContent = " 保存しました"; setTimeout(() => { $("hb-jstate").textContent = ""; }, 2500); });
+    // 「明日のToDo」→ホームの「今日やること」への連携（2026-09-24追加）：保存すると、
+    // 行（および「／」区切り）ごとに、翌日が期限の自分のタスクとして自動登録する。
+    // 既に同じ期限・同じ文言のタスクがあれば、二重に登録しない（保存を繰り返しても安全）。
+    async function syncTomorrowTasks(text) {
+      const items = text.split(/\n|／|\//).map(s => s.trim()).filter(Boolean);
+      if (!items.length) return;
+      const due = ymd(addDays(new Date(day + "T00:00:00"), 1));
+      const { data: existing, error } = await sb.from("tasks").select("title").eq("due_date", due);
+      if (error) return;   // tasks未準備などは、静かに諦める（ジャーナル保存自体は失敗させない）
+      const have = new Set((existing || []).map(t => t.title));
+      const toAdd = items.filter(t => !have.has(t)).map(title => ({ title, due_date: due }));
+      if (toAdd.length) await sb.from("tasks").insert(toAdd);
+    }
+    $("hb-jsave").addEventListener("click", async () => {
+      const todo = $("hb-todo").value.trim();
+      await save({ todo, gratitude: $("hb-grat").value.trim(), reflection: $("hb-refl").value.trim() });
+      await syncTomorrowTasks(todo);
+      $("hb-jstate").textContent = " 保存しました（翌日のタスクにも反映）"; setTimeout(() => { $("hb-jstate").textContent = ""; }, 3000);
+    });
     $("hb-wsave").addEventListener("click", async () => {
       try { localStorage.setItem("lb_woop", JSON.stringify({ w: $("hb-w").value.trim(), o: $("hb-o").value.trim(), ob: $("hb-ob").value.trim(), p: $("hb-p").value.trim() })); } catch (e) { /* 保存不可 */ }
       await save({ imagery: $("hb-img").value.trim() }); $("hb-wsave").textContent = "保存しました"; setTimeout(() => { $("hb-wsave").textContent = "保存"; }, 2000);
