@@ -2771,8 +2771,15 @@
       <ul>${(window.FORM_COMMON || []).map(t => `<li>${escapeHtml(t)}</li>`).join("")}</ul>
     </div>`;
     box.style.display = "block";
-    // 実際の動画（YouTube検索）へのリンクは全種目に付ける
-    document.getElementById("form-video").href = "https://www.youtube.com/results?search_query=" + encodeURIComponent(name + " やり方 フォーム");
+    // 実際の動画（YouTube検索）へのリンクは全種目に付ける。
+    // 自宅トレーニング系の動画は「筋肥大・宅トレ」目的のものが多く、この方針（速筋・実用）と
+    // ずれるという指摘（2026-09-23）を受け、検索語を種目の性格に合わせて変える：
+    // 速筋（爆発系）種目は「爆発力・パワー」、自重種目は「実用的な筋力」を加えて、
+    // 単なる筋肥大・宅トレ向け動画に偏らないようにする。
+    let videoQuery = name + " やり方 フォーム";
+    if (SPEED.has(name)) videoQuery += " 爆発力 パワー";
+    else if (exerciseByName[name] && exerciseByName[name].bw) videoQuery += " 実用的な筋力";
+    document.getElementById("form-video").href = "https://www.youtube.com/results?search_query=" + encodeURIComponent(videoQuery);
     // 簡易3Dアニメ（2026-09-22、全59種目に対応）。使わない場合は ANIM_ENABLED を false にすればリンクだけになる。
     const wrap = document.getElementById("form-anim-wrap");
     if (ANIM_ENABLED && window.FormAnim && FormAnim.has(name)){
