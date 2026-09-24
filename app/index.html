@@ -614,7 +614,7 @@
             <label for="r-category">カテゴリ</label>
             <select id="r-category">
               <option>食費</option><option>日用品</option><option>交通費</option><option>旅行</option>
-              <option>交際費</option><option>趣味・娯楽</option><option>固定費</option><option>その他</option>
+              <option>交際費</option><option>趣味・娯楽</option><option>固定費</option><option>たばこ代</option><option>その他</option>
             </select>
           </div>
         </div>
@@ -1225,6 +1225,13 @@
     // 別々に記録できる（合計が元の金額と一致するまで記録できない）。
     const catOpts = [...document.querySelectorAll("#r-category option")].map(o => o.value);
     const catSelect = (sel) => `<select class="pend-cat">${catOpts.map(c => `<option value="${escapeHtml(c)}"${c === sel ? " selected" : ""}>${escapeHtml(c)}</option>`).join("")}</select>`;
+    // 内訳に「タバコ／たばこ」と書いたら、カテゴリを自動で「たばこ代」にする（2026-09-24追加）。
+    // レシート読み取り（Gemini）の分類候補に「たばこ代」が無いため、そのままだと食費等に
+    // 分類されてしまい、分割時に毎回手直しが必要だった。
+    const wireTabacco = (memoEl, catEl) => {
+      if (!catOpts.includes("たばこ代")) return;
+      memoEl.addEventListener("input", () => { if (/タバコ|たばこ/.test(memoEl.value)) catEl.value = "たばこ代"; });
+    };
     listEl.innerHTML = data.map(p => `
       <li class="row pend-row" data-id="${p.id}">
         <span class="desc">${escapeHtml(p.origin)}</span>
@@ -1258,11 +1265,23 @@
         info.className = "sp-rest" + (rest === 0 ? " ok" : " ng");
         splitEl.querySelector(".sp-confirm").disabled = rest !== 0 || [...splitEl.querySelectorAll(".sp-amt")].some(i => !(parseInt(i.value, 10) > 0));
       };
+      // 金額を入力するたびに、空欄が1つだけなら、残りの金額を自動で入れる（2026-09-24追加）。
+      // 合計を毎回手計算しなくても、最後の1行は自動で埋まる。
+      const autofill = () => {
+        const inputs = [...splitEl.querySelectorAll(".sp-amt")];
+        const blanks = inputs.filter(i => i.value.trim() === "");
+        if (blanks.length === 1) {
+          const restAmt = p.amount - inputs.filter(i => i !== blanks[0]).reduce((t, i) => t + (parseInt(i.value, 10) || 0), 0);
+          if (restAmt > 0) blanks[0].value = restAmt;
+        }
+        refresh();
+      };
       const wire = () => {
-        splitEl.querySelectorAll(".sp-amt").forEach(i => i.oninput = refresh);
+        splitEl.querySelectorAll(".sp-amt").forEach(i => i.oninput = autofill);
+        splitEl.querySelectorAll(".sp-line").forEach(line => wireTabacco(line.querySelector(".sp-memo"), line.querySelector(".pend-cat")));
         splitEl.querySelectorAll(".sp-del").forEach(btn => btn.onclick = () => {
           if (splitEl.querySelectorAll(".sp-line").length <= 2) return;   // 分割は最低2行
-          btn.closest(".sp-line").remove(); refresh();
+          btn.closest(".sp-line").remove(); autofill();
         });
       };
       const openSplit = () => {
@@ -1277,7 +1296,7 @@
         wire(); refresh();
         splitEl.querySelector(".sp-add").onclick = () => {
           splitEl.querySelector(".sp-lines").insertAdjacentHTML("beforeend", lineHtml("", p.category, ""));
-          wire(); refresh();
+          wire(); autofill();
         };
         splitEl.querySelector(".sp-cancel").onclick = () => { splitEl.style.display = "none"; single.style.display = "flex"; };
         splitEl.querySelector(".sp-confirm").onclick = async (ev) => {
@@ -1304,6 +1323,7 @@
         };
       };
       rowEl.querySelector(".split-btn").addEventListener("click", openSplit);
+      wireTabacco(rowEl.querySelector(".pend-single .pend-memo"), rowEl.querySelector(".pend-single .pend-cat"));
     });
 
     listEl.querySelectorAll(".pend-single .confirm-btn").forEach(btn => btn.addEventListener("click", async () => {
