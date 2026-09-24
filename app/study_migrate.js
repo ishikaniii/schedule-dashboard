@@ -18,11 +18,12 @@
 
   async function migrateFP(sb) {
     try {
-      if (localStorage.getItem(DONE_KEY) === "1") return;
+      if (localStorage.getItem(DONE_KEY) === "1") { console.log("[FP移行] 既にこの端末で完了済み"); return; }
       const raw = localStorage.getItem("lb_fp");
-      if (!raw) { localStorage.setItem(DONE_KEY, "1"); return; }
-      let f; try { f = JSON.parse(raw); } catch (e) { localStorage.setItem(DONE_KEY, "1"); return; }
-      if (!f || (!f.date && !f.target && !f.areas)) { localStorage.setItem(DONE_KEY, "1"); return; }
+      if (!raw) { console.log("[FP移行] この端末にlb_fpが無いため、何もしません"); localStorage.setItem(DONE_KEY, "1"); return; }
+      let f; try { f = JSON.parse(raw); } catch (e) { console.warn("[FP移行] lb_fpの中身が壊れています:", raw); localStorage.setItem(DONE_KEY, "1"); return; }
+      if (!f || (!f.date && !f.target && !f.areas)) { console.log("[FP移行] lb_fpが空でした:", f); localStorage.setItem(DONE_KEY, "1"); return; }
+      console.log("[FP移行] ローカルのFPデータを検出:", f);
 
       const localAreaStatus = {};
       FP_AREAS.forEach((name, i) => {
@@ -32,7 +33,7 @@
       const localTargetHours = parseInt(f.target, 10) || 100;
 
       const { data: existing, error: selErr } = await sb.from("qualifications").select("*").eq("name", "FP3級").limit(1);
-      if (selErr) return;   // qualificationsテーブル未準備。SQL実行後にまた試す
+      if (selErr) { console.warn("[FP移行] qualificationsテーブルが未準備、またはエラー。SQL実行後に再試行されます:", selErr); return; }
 
       if (!existing || !existing.length) {
         // この端末が最初：新規作成
@@ -40,7 +41,9 @@
           name: "FP3級", target_date: f.date || null, target_hours: localTargetHours,
           areas: FP_AREAS, area_status: localAreaStatus,
         });
-        if (!error) localStorage.setItem(DONE_KEY, "1");
+        if (error) { console.error("[FP移行] 新規作成に失敗しました:", error); return; }
+        console.log("[FP移行] 新規作成しました");
+        localStorage.setItem(DONE_KEY, "1");
         return;
       }
 
@@ -59,8 +62,10 @@
         area_status: mergedAreaStatus,
       };
       const { error } = await sb.from("qualifications").update(patch).eq("id", remote.id);
-      if (!error) localStorage.setItem(DONE_KEY, "1");
-    } catch (e) { /* 移行に失敗しても、通常の表示は続ける */ }
+      if (error) { console.error("[FP移行] 合算に失敗しました:", error); return; }
+      console.log("[FP移行] 既存の資格と合算しました:", patch);
+      localStorage.setItem(DONE_KEY, "1");
+    } catch (e) { console.error("FP3級の移行に失敗しました（通常の表示は続けます）:", e); }
   }
 
   global.LifeStudyMigrate = { migrateFP };
