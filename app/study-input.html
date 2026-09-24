@@ -6,9 +6,9 @@
 <title>学習の記録・設定 - LifeBase</title>
 <style>
   :root{ color-scheme:light dark; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px); }
-  :root{ --bg:#f2f3f6; --surface:#ffffff; --ink:#1b1d22; --ink-dim:#6b7078; --border:#e2e4ea; --accent:#5b3fae; --good:#2f8f5b; --strength:#b23a3a; }
-  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ --bg:#14161b; --surface:#1c1f26; --ink:#eceef2; --ink-dim:#9aa0ab; --border:#2c303a; --accent:#9d8bdc; --good:#5fbf8a; --strength:#e08080; } }
-  :root[data-theme="dark"]{ --bg:#14161b; --surface:#1c1f26; --ink:#eceef2; --ink-dim:#9aa0ab; --border:#2c303a; --accent:#9d8bdc; --good:#5fbf8a; --strength:#e08080; }
+  :root{ --bg:#f2f3f6; --surface:#ffffff; --surface-2:#eceef2; --ink:#1b1d22; --ink-dim:#6b7078; --border:#e2e4ea; --accent:#5b3fae; --good:#2f8f5b; --strength:#b23a3a; }
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ --bg:#14161b; --surface:#1c1f26; --surface-2:#242833; --ink:#eceef2; --ink-dim:#9aa0ab; --border:#2c303a; --accent:#9d8bdc; --good:#5fbf8a; --strength:#e08080; } }
+  :root[data-theme="dark"]{ --bg:#14161b; --surface:#1c1f26; --surface-2:#242833; --ink:#eceef2; --ink-dim:#9aa0ab; --border:#2c303a; --accent:#9d8bdc; --good:#5fbf8a; --strength:#e08080; }
   *{ box-sizing:border-box; }
   body{ margin:0; background:var(--bg); color:var(--ink); font-family:"Hiragino Sans","Yu Gothic",sans-serif; font-size:14px; padding:18px 16px 40px; }
   img{ max-width:100%; } [hidden]{ display:none!important; }
@@ -22,12 +22,24 @@
   .row2{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
   button.primary{ width:100%; border:none; border-radius:9px; padding:11px; background:var(--accent); color:#fff; font-size:14px; font-weight:600; cursor:pointer; }
   button.primary:disabled{ opacity:.5; cursor:not-allowed; }
+  button.ghost{ width:100%; border:1px solid var(--border); border-radius:9px; padding:9px; background:none; color:var(--ink); font-size:13px; cursor:pointer; }
   .hint{ font-size:11.5px; color:var(--ink-dim); margin-top:8px; line-height:1.5; }
   .notice{ background:color-mix(in srgb, var(--strength) 14%, var(--surface)); border:1px solid var(--strength); border-radius:9px; padding:8px 10px; font-size:12px; margin-bottom:10px; }
   .ok{ background:color-mix(in srgb, var(--good) 14%, var(--surface)); border:1px solid var(--good); border-radius:9px; padding:8px 10px; font-size:12.5px; margin-top:8px; }
   .area{ display:flex; align-items:center; justify-content:space-between; gap:8px; padding:7px 0; border-bottom:1px solid var(--border); font-size:13px; }
   .area:last-child{ border-bottom:none; }
   .area label{ display:flex; align-items:center; gap:4px; margin:0; font-size:12px; }
+  .qual-box{ background:var(--surface-2); border-radius:10px; padding:12px; margin-bottom:10px; }
+  .qual-top{ display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px; }
+  .qual-top b{ font-size:13.5px; }
+  .qual-del{ background:none; border:none; color:var(--ink-dim); cursor:pointer; font-size:16px; padding:2px 6px; }
+  .area-add{ display:flex; gap:6px; margin-top:6px; }
+  .area-add input{ margin:0; }
+  .area-add button{ flex:none; width:auto; padding:8px 12px; border:none; border-radius:8px; background:var(--accent); color:#fff; font-size:12px; }
+  .seg{ display:flex; gap:6px; margin-bottom:10px; }
+  .seg button{ flex:1; border:1px solid var(--border); background:var(--bg); color:var(--ink-dim); border-radius:8px; padding:8px; font-size:12.5px; cursor:pointer; }
+  .seg button.active{ background:var(--accent); border-color:var(--accent); color:#fff; }
+  #ib-preview{ max-width:100%; border-radius:9px; margin-top:8px; display:none; }
   #gate{ position:fixed; inset:0; background:var(--bg); display:flex; align-items:center; justify-content:center; z-index:50; }
   #gate .box{ width:min(320px,90vw); text-align:center; }
   #gate input{ text-align:center; letter-spacing:.1em; }
@@ -50,8 +62,8 @@
   <div class="card">
     <h2>学習の時間を記録</h2>
     <div class="row2">
-      <label>科目・分野<input type="text" id="st-subject" list="st-subjects" placeholder="例：経済学 / FP"></label>
-      <label>種類<select id="st-kind"><option>講義</option><option>FP</option><option>読書</option><option>その他</option></select></label>
+      <label>科目・分野<input type="text" id="st-subject" list="st-subjects" placeholder="例：経済学 / FP3級"></label>
+      <label>種類<select id="st-kind"><option>講義</option><option>資格</option><option>読書</option><option>その他</option></select></label>
     </div>
     <datalist id="st-subjects"></datalist>
     <label>内容・範囲<input type="text" id="st-title" maxlength="80" placeholder="例：第5回 需要と供給の弾力性／第2章 ライフプラン"></label>
@@ -66,26 +78,41 @@
   </div>
 
   <div class="card">
-    <h2>FP3級の設定</h2>
-    <div class="row2">
-      <label>受検予定日<input type="date" id="fp-date"></label>
-      <label>目標の学習時間(h)<input type="number" id="fp-target" min="10" step="10"></label>
+    <h2>資格の管理</h2>
+    <p class="hint" style="margin-top:0;">資格を自由に追加できます（FP3級に限りません）。分野を追加すると、その分野ごとの学習時間・読了／問題演習のチェックができます。上の「学習の時間を記録」で、科目・分野に資格名（または「資格名：分野名」）を選ぶと、ここに積み上がります。</p>
+    <div id="qual-list"></div>
+    <div class="qual-box">
+      <b>資格を追加</b>
+      <label style="margin-top:8px;">資格名<input type="text" id="qn-name" maxlength="60" placeholder="例：危険物取扱者乙4"></label>
+      <div class="row2">
+        <label>受検予定日（未定でも可）<input type="date" id="qn-date"></label>
+        <label>目標の学習時間(h)<input type="number" id="qn-hours" min="1" step="10" value="100"></label>
+      </div>
+      <label>分野（任意・カンマ区切り）<input type="text" id="qn-areas" placeholder="例：分野A,分野B,分野C"></label>
+      <button type="button" id="qn-add" class="primary">追加する</button>
     </div>
-    <div id="fp-areas"></div>
-    <div class="hint">受検日は未定でもかまいません。分野のチェックは、この端末に保存されます。</div>
   </div>
 
   <div class="card">
     <h2>ノート・教材からカードを作る</h2>
     <div id="ib-notice"></div>
+    <div class="seg">
+      <button type="button" class="seg-btn active" data-mode="text">文章で送る</button>
+      <button type="button" class="seg-btn" data-mode="photo">手書きノートの写真</button>
+    </div>
     <div class="row2">
       <label>科目<input type="text" id="ib-subject" list="st-subjects" placeholder="例：FP3級 / 経済学"></label>
       <label>題名（省略可）<input type="text" id="ib-title" maxlength="60" placeholder="例：第2章 ライフプラン"></label>
     </div>
-    <label>自分の要点メモ<textarea id="ib-text" rows="6" maxlength="20000" placeholder="学んだことを、自分の言葉でまとめたメモを貼ってください"></textarea></label>
+    <label id="ib-text-wrap">自分の要点メモ<textarea id="ib-text" rows="6" maxlength="20000" placeholder="学んだことを、自分の言葉でまとめたメモを貼ってください"></textarea></label>
+    <label id="ib-photo-wrap" hidden>ノートの写真（iPadなどのカメラ・写真から選べます）
+      <input type="file" id="ib-photo" accept="image/*">
+      <img id="ib-preview">
+    </label>
+    <label id="ib-caption-wrap" hidden>補足（省略可）<input type="text" id="ib-caption" maxlength="200" placeholder="例：今日の講義の後半だけ"></label>
     <button type="button" id="ib-send" class="primary">送る</button>
     <div id="ib-ok"></div>
-    <div class="hint">送ると、PCがGemini（無料枠）で要約・用語・練習問題・復習カードを作ります（約30分以内、状況は学習タブで確認できます）。<b>教科書や過去問の文章をそのまま貼らず、自分の要点メモにしてください。</b>FPなど資格の内容は、AIが間違えることがあるので、公式教材で確認してください。メモはGoogleに送られます。</div>
+    <div class="hint">送ると、PCがGemini（無料枠）で（写真ならまず文字起こしをしてから）要約・用語・練習問題・復習カードを作ります（約30分以内、状況は学習タブで確認できます）。<b>教科書や過去問の文章をそのまま貼らず、自分の要点メモ・ノートにしてください。</b>資格の内容は、AIが間違えることがあるので、公式教材で確認してください。メモ・写真はGoogleに送られます。</div>
   </div>
 </div>
 
@@ -100,8 +127,6 @@
   const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   const $ = (id) => document.getElementById(id);
   const esc = (s) => (s == null ? "" : String(s)).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
-  const ls = { get(k,d){ try{ const v=localStorage.getItem(k); return v==null?d:v; }catch(e){ return d; } }, set(k,v){ try{ localStorage.setItem(k,v); }catch(e){} } };
-  const FP_AREAS = ["ライフプランニングと資金計画","リスク管理","金融資産運用","タックスプランニング","不動産","相続・事業承継"];
 
   async function sha256Hex(text){ const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)); return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,"0")).join(""); }
   function openApp(){ $("gate").style.display="none"; $("app").classList.add("show"); initApp(); }
@@ -115,7 +140,13 @@
   (function checkStoredAuth(){ let stored=null; try{ stored=localStorage.getItem(AUTH_STORAGE_KEY); }catch(e){} if (stored===PASSCODE_HASH_HEX) openApp(); })();
 
   function initApp(){
-    $("st-subjects").innerHTML = `<option>経済学</option><option>FP3級</option>${FP_AREAS.map(a=>`<option>FP：${esc(a)}</option>`).join("")}`;
+    let quals = [], qualsMissing = false;
+
+    function rebuildSubjectList(){
+      const opts = ["経済学"];
+      quals.forEach(q => { opts.push(q.name); (q.areas||[]).forEach(a => opts.push(`${q.name}：${a}`)); });
+      $("st-subjects").innerHTML = opts.map(o => `<option>${esc(o)}</option>`).join("");
+    }
 
     // ---------- 学習の時間を記録 ----------
     async function loadList(){
@@ -138,35 +169,116 @@
       $("st-title").value = ""; $("st-min").value = ""; $("st-ok").innerHTML = '<p class="ok">記録しました。</p>'; loadList();
     });
 
-    // ---------- FP設定 ----------
-    const fpLoad = () => { try{ return JSON.parse(ls.get("lb_fp","{}")); }catch(e){ return {}; } };
-    function fpRender(){
-      const f = fpLoad();
-      $("fp-date").value = f.date || ""; $("fp-target").value = f.target || 100;
-      const a = f.areas || {};
-      $("fp-areas").innerHTML = FP_AREAS.map((n,i) => `<div class="area"><span>${esc(n)}</span><label><input type="checkbox" data-a="${i}" data-k="read"${a[i]&&a[i].read?" checked":""}> 読了</label><label><input type="checkbox" data-a="${i}" data-k="drill"${a[i]&&a[i].drill?" checked":""}> 問題演習</label></div>`).join("");
-      $("fp-areas").querySelectorAll("input").forEach(cb => cb.addEventListener("change", () => { const g=fpLoad(); g.areas=g.areas||{}; g.areas[cb.dataset.a]=g.areas[cb.dataset.a]||{}; g.areas[cb.dataset.a][cb.dataset.k]=cb.checked; ls.set("lb_fp", JSON.stringify(g)); }));
+    // ---------- 資格の管理（2026-09-24、FP3級専用から一般化） ----------
+    async function loadQuals(){
+      const { data, error } = await sb.from("qualifications").select("*").order("created_at",{ascending:true});
+      qualsMissing = !!error;
+      quals = error ? [] : (data || []);
+      renderQuals(); rebuildSubjectList();
     }
-    const fpSave = () => { const g = fpLoad(); g.date = $("fp-date").value; g.target = parseInt($("fp-target").value,10) || 100; ls.set("lb_fp", JSON.stringify(g)); };
-    $("fp-date").addEventListener("change", fpSave); $("fp-target").addEventListener("change", fpSave);
-    fpRender();
+    function renderQuals(){
+      const el = $("qual-list");
+      if (qualsMissing){ el.innerHTML = '<div class="notice">まだ準備ができていません。Supabaseで schema.sql の「資格の管理」のSQLを実行してください。</div>'; return; }
+      if (!quals.length){ el.innerHTML = '<p class="hint" style="margin-top:0;">まだ資格が登録されていません。下から追加してください。</p>'; return; }
+      el.innerHTML = quals.map(q => {
+        const areas = q.areas || [], st = q.area_status || {};
+        return `<div class="qual-box" data-id="${esc(q.id)}">
+          <div class="qual-top"><b>${esc(q.name)}</b><button type="button" class="qual-del" data-id="${esc(q.id)}" aria-label="削除">×</button></div>
+          <div class="row2">
+            <label>受検予定日<input type="date" class="qn-edit-date" value="${q.target_date||""}"></label>
+            <label>目標時間(h)<input type="number" class="qn-edit-hours" min="1" step="10" value="${q.target_hours||100}"></label>
+          </div>
+          ${areas.map(a => `<div class="area"><span>${esc(a)}</span>
+            <label><input type="checkbox" class="qn-area-chk" data-area="${esc(a)}" data-k="read"${st[a]&&st[a].read?" checked":""}> 読了</label>
+            <label><input type="checkbox" class="qn-area-chk" data-area="${esc(a)}" data-k="drill"${st[a]&&st[a].drill?" checked":""}> 問題演習</label>
+            <button type="button" class="qual-del qn-area-del" data-area="${esc(a)}" aria-label="分野を削除">×</button></div>`).join("")}
+          <div class="area-add"><input type="text" class="qn-area-new" placeholder="分野を追加"><button type="button" class="qn-area-add">追加</button></div>
+        </div>`;
+      }).join("");
+      el.querySelectorAll(".qual-box").forEach(box => {
+        const id = box.dataset.id, q = quals.find(x => String(x.id) === id);
+        const patch = async (p) => { await sb.from("qualifications").update(p).eq("id", id); };
+        box.querySelector(".qn-edit-date").addEventListener("change", e => { q.target_date = e.target.value || null; patch({ target_date: q.target_date }); });
+        box.querySelector(".qn-edit-hours").addEventListener("change", e => { q.target_hours = parseInt(e.target.value,10)||100; patch({ target_hours: q.target_hours }); });
+        box.querySelectorAll(".qn-area-chk").forEach(cb => cb.addEventListener("change", () => {
+          q.area_status = q.area_status || {}; q.area_status[cb.dataset.area] = q.area_status[cb.dataset.area] || {};
+          q.area_status[cb.dataset.area][cb.dataset.k] = cb.checked; patch({ area_status: q.area_status });
+        }));
+        box.querySelector(".qual-del:not(.qn-area-del)").addEventListener("click", async () => {
+          if (!confirm(`「${q.name}」を削除しますか？（学習の記録自体は消えません）`)) return;
+          await sb.from("qualifications").delete().eq("id", id); loadQuals();
+        });
+        box.querySelectorAll(".qn-area-del").forEach(btn => btn.addEventListener("click", async () => {
+          q.areas = (q.areas||[]).filter(a => a !== btn.dataset.area);
+          if (q.area_status) delete q.area_status[btn.dataset.area];
+          await patch({ areas: q.areas, area_status: q.area_status || {} }); loadQuals();
+        }));
+        box.querySelector(".qn-area-add").addEventListener("click", async () => {
+          const inp = box.querySelector(".qn-area-new"), name = inp.value.trim();
+          if (!name) return;
+          q.areas = [...(q.areas||[]), name];
+          await patch({ areas: q.areas }); loadQuals();
+        });
+      });
+    }
+    $("qn-add").addEventListener("click", async () => {
+      const name = $("qn-name").value.trim();
+      if (!name) return;
+      const areas = $("qn-areas").value.split(",").map(s=>s.trim()).filter(Boolean);
+      const row = { name, target_date: $("qn-date").value || null, target_hours: parseInt($("qn-hours").value,10)||100, areas, area_status: {} };
+      const { error } = await sb.from("qualifications").insert(row);
+      if (error){ alert("追加に失敗しました: " + error.message); return; }
+      $("qn-name").value = ""; $("qn-date").value = ""; $("qn-hours").value = "100"; $("qn-areas").value = "";
+      loadQuals();
+    });
 
-    // ---------- ノート受信箱 ----------
+    // ---------- ノート受信箱（テキスト／写真、2026-09-24に写真対応を追加） ----------
+    let ibMode = "text";
+    document.querySelectorAll(".seg-btn").forEach(btn => btn.addEventListener("click", () => {
+      ibMode = btn.dataset.mode;
+      document.querySelectorAll(".seg-btn").forEach(b => b.classList.toggle("active", b === btn));
+      $("ib-text-wrap").hidden = ibMode !== "text";
+      $("ib-photo-wrap").hidden = ibMode !== "photo";
+      $("ib-caption-wrap").hidden = ibMode !== "photo";
+    }));
+    let photoB64 = null;
+    $("ib-photo").addEventListener("change", async () => {
+      const file = $("ib-photo").files[0]; photoB64 = null;
+      $("ib-preview").style.display = "none";
+      if (!file) return;
+      const bmp = await createImageBitmap(file, { imageOrientation: "from-image" });
+      const scale = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
+      const c = document.createElement("canvas"); c.width = Math.round(bmp.width*scale); c.height = Math.round(bmp.height*scale);
+      c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
+      const dataUrl = c.toDataURL("image/jpeg", 0.88);
+      photoB64 = dataUrl.split(",")[1];
+      $("ib-preview").src = dataUrl; $("ib-preview").style.display = "block";
+    });
     sb.from("study_inbox").select("id",{count:"exact",head:true}).then(({error}) => {
       if (error) { $("ib-notice").innerHTML = '<div class="notice">まだ準備ができていません。Supabaseで schema.sql の「学習の受信箱」のSQLを実行してください。</div>'; $("ib-send").disabled = true; }
     });
     $("ib-send").addEventListener("click", async () => {
-      const subject = $("ib-subject").value.trim(), text = $("ib-text").value.trim();
-      if (!subject || text.length < 30){ $("ib-ok").innerHTML = '<p class="hint" style="color:var(--strength);">科目と、30文字以上のメモを入れてください。</p>'; return; }
+      const subject = $("ib-subject").value.trim();
+      if (!subject){ $("ib-ok").innerHTML = '<p class="hint" style="color:var(--strength);">科目を入れてください。</p>'; return; }
+      let row;
+      if (ibMode === "photo"){
+        if (!photoB64){ $("ib-ok").innerHTML = '<p class="hint" style="color:var(--strength);">ノートの写真を選んでください。</p>'; return; }
+        row = { subject, title: $("ib-title").value.trim() || null, text: $("ib-caption").value.trim(), image_b64: photoB64 };
+      } else {
+        const text = $("ib-text").value.trim();
+        if (text.length < 30){ $("ib-ok").innerHTML = '<p class="hint" style="color:var(--strength);">30文字以上のメモを入れてください。</p>'; return; }
+        row = { subject, title: $("ib-title").value.trim() || null, text };
+      }
       const btn = $("ib-send"); btn.disabled = true; btn.textContent = "送っています…";
-      const { error } = await sb.from("study_inbox").insert({ subject, title: $("ib-title").value.trim() || null, text });
+      const { error } = await sb.from("study_inbox").insert(row);
       btn.disabled = false; btn.textContent = "送る";
       if (error){ $("ib-ok").innerHTML = `<p class="hint" style="color:var(--strength);">送信に失敗しました: ${esc(error.message)}</p>`; return; }
-      $("ib-subject").value = ""; $("ib-title").value = ""; $("ib-text").value = "";
+      $("ib-subject").value = ""; $("ib-title").value = ""; $("ib-text").value = ""; $("ib-caption").value = "";
+      $("ib-photo").value = ""; photoB64 = null; $("ib-preview").style.display = "none";
       $("ib-ok").innerHTML = '<p class="ok">送りました。学習タブの「ノート・教材」欄で、状況を確認できます。</p>';
     });
 
-    loadList();
+    loadList(); loadQuals();
   }
 })();
 </script>

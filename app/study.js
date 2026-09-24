@@ -1,25 +1,24 @@
-// LifeBase「学習」タブ（2026-09-21、2026-09-22拡張、2026-09-22確認専用化）
+// LifeBase「学習」タブ（2026-09-21、2026-09-22拡張、2026-09-22確認専用化、2026-09-24資格の複数対応）
 // このタブは確認だけを行う（記録・追加・削除・設定変更・ノート送信は行わない）。
 // 入力・設定は別ページ study-input.html で行う（ユーザー要望：学習タブは見るだけにしたい）。
 // 復習の予定管理（エビングハウスの忘却曲線を参考にした 1日後→3日後→1週間後→2週間後→1か月後）と、
-// FP3級の進み具合。復習そのもの（問題・用語・白紙再生）は、学習エージェント
-// （lecture-study-companion）のArtifactページで行い、ここからワンタップで開く。
+// 資格（FP3級専用だったものを一般化。複数の資格を登録できる）の進み具合。復習そのもの
+// （問題・用語・白紙再生）は、学習エージェント（lecture-study-companion）のArtifactページで
+// 行い、ここからワンタップで開く。
 (function (global) {
   "use strict";
   const STEPS = [1, 3, 7, 14, 30];
-  const FP_AREAS = ["ライフプランニングと資金計画", "リスク管理", "金融資産運用", "タックスプランニング", "不動産", "相続・事業承継"];
 
   const pad = (n) => String(n).padStart(2, "0");
   const ymd = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
   const parse = (s) => new Date(s + "T00:00:00");
   const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
   const esc = (s) => (s == null ? "" : String(s)).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  const ls = { get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : v; } catch (e) { return d; } } };
 
   function mount(root, ctx) {
     const sb = ctx.sb;
     const today = ymd(new Date());
-    let items = [], cards = [], events = [], inbox = [], inboxMissing = false;
+    let items = [], cards = [], events = [], inbox = [], inboxMissing = false, quals = [], qualsMissing = false;
 
     root.innerHTML = `
       <div class="card st-card">
@@ -27,11 +26,11 @@
         <a id="st-open" class="st-open" href="../study/">復習ページを開く（集中して復習する別ページ）</a>
         <a class="st-open st-open-2" href="study-input.html">記録・設定はこちら（別ページ）</a>
         <div id="st-cards" class="meal-hint"></div>
-        <div class="meal-hint">復習は、家計・予定・食事などが出ない専用ページで行います（強度を上げて集中するため）。学習の記録・FPの設定・ノート送信は、上の別ページで行います。ここでは確認だけができます。</div>
+        <div class="meal-hint">復習は、家計・予定・食事などが出ない専用ページで行います（強度を上げて集中するため）。学習の記録・資格の登録・ノート送信は、上の別ページで行います。ここでは確認だけができます。</div>
       </div>
       <div class="card st-card" id="st-stats"></div>
       <div class="card st-card" id="st-plan"></div>
-      <div class="card st-card"><h2>FP3級の進み具合</h2><div id="fp-plan" class="meal-hint"></div><div id="fp-areas"></div></div>
+      <div class="card st-card" id="st-quals"></div>
       <div class="card st-card" id="st-inbox"></div>
       <div class="card st-card"><h2>学習の記録（最近15件）</h2><ul class="list" id="st-list"></ul></div>`;
     const $ = (id) => root.querySelector("#" + id);
@@ -49,13 +48,15 @@
       inboxMissing = !!ib.error; inbox = ib.error ? [] : (ib.data || []);
       const sn = await sb.from("dashboard_snapshot").select("data").eq("id", 1).maybeSingle();
       events = (sn.data && sn.data.data && sn.data.data.calendar_events) || [];
+      const qr = await sb.from("qualifications").select("*").order("created_at", { ascending: true });
+      qualsMissing = !!qr.error; quals = qr.error ? [] : (qr.data || []);
       render();
     }
 
     function render() {
       cardCounts();
       $("st-list").innerHTML = items.slice(0, 15).map(it => `<li class="row"><span class="date mono">${String(it.date).slice(5)}</span><span class="desc">${esc(it.subject)}｜${esc(it.title)}${it.minutes ? `（${it.minutes}分）` : ""}<small class="st-prog"> 復習 ${(it.done_steps || []).length}/${STEPS.length}</small></span></li>`).join("") || '<li class="empty">まだ記録がありません。<a href="study-input.html">記録する</a></li>';
-      fpRender(); renderStats(); renderPlan(); renderInbox();
+      renderQuals(); renderStats(); renderPlan(); renderInbox();
     }
 
     async function cardCounts() {
@@ -129,16 +130,28 @@
         <div class="meal-hint">ノートを送るのは、上の「記録・設定はこちら」の別ページから行います。</div>`;
     }
 
-    // ---------- FP（確認のみ。設定は study-input.html） ----------
-    const fpLoad = () => { try { return JSON.parse(ls.get("lb_fp", "{}")); } catch (e) { return {}; } };
-    function fpRender() {
-      const f = fpLoad(), target = f.target || 100, hrs = items.filter(x => x.kind === "FP").reduce((s, x) => s + (+x.minutes || 0), 0) / 60;
-      let plan = `学習時間：${hrs.toFixed(1)} / ${target} 時間（${Math.min(100, Math.round(hrs / target * 100))}%）。`;
-      if (!f.date) { const need0 = Math.max(0, target - hrs); plan += ` 受検日が未定なので、目標時間ベースで表示しています（1日30分なら、あと約${Math.ceil(need0 * 2)}日）。`; }
-      if (f.date) { const left = Math.ceil((parse(f.date) - parse(today)) / 86400000); if (left > 0) { const need = Math.max(0, target - hrs); plan += ` 受検まで${left}日。残り${need.toFixed(0)}時間＝1日あたり約${(need / left * 60).toFixed(0)}分。`; } else plan += " 受検日を過ぎています。"; }
-      $("fp-plan").textContent = plan;
-      const a = f.areas || {};
-      $("fp-areas").innerHTML = FP_AREAS.map((n, i) => `<div class="st-area"><span>${esc(n)}<small class="st-prog"> ${(items.filter(x => x.kind === "FP" && String(x.subject).startsWith("FP：" + n)).reduce((t, x) => t + (+x.minutes || 0), 0) / 60).toFixed(1)}h</small></span><span class="st-area-check">${a[i] && a[i].read ? "読了 ✓" : "読了 −"}　${a[i] && a[i].drill ? "問題演習 ✓" : "問題演習 −"}</span></div>`).join("");
+    // ---------- 資格（確認のみ。追加・設定は study-input.html。2026-09-24、FP専用から一般化） ----------
+    // 学習時間の集計は、study_items.subject が「資格名」（全体）または「資格名：分野名」
+    // （分野別）と一致するものを合算する（kindは問わない——講義扱いで記録していても拾う）。
+    function qualHours(name, area) {
+      const match = area
+        ? (s) => s === `${name}：${area}`                                   // 分野別：その分野の記録だけ
+        : (s) => s === name || String(s || "").startsWith(name + "：");     // 全体：資格名＋分野別の記録すべて
+      return items.filter(x => match(x.subject)).reduce((s, x) => s + (+x.minutes || 0), 0) / 60;
+    }
+    function renderQuals() {
+      const el = $("st-quals"); if (!el) return;
+      if (qualsMissing) { el.innerHTML = '<h2>資格の進み具合</h2><div class="meal-notice">まだ準備ができていません。Supabaseで schema.sql の「資格の管理」のSQLを実行してください。</div>'; return; }
+      if (!quals.length) { el.innerHTML = '<h2>資格の進み具合</h2><p class="empty">まだ資格が登録されていません。<a href="study-input.html">追加する</a></p>'; return; }
+      el.innerHTML = `<h2>資格の進み具合</h2>` + quals.map(q => {
+        const target = q.target_hours || 100, hrs = qualHours(q.name);
+        let plan = `学習時間：${hrs.toFixed(1)} / ${target} 時間（${Math.min(100, Math.round(hrs / target * 100))}%）。`;
+        if (!q.target_date) { const need0 = Math.max(0, target - hrs); plan += ` 受検日が未定なので、目標時間ベースで表示しています（1日30分なら、あと約${Math.ceil(need0 * 2)}日）。`; }
+        else { const left = Math.ceil((parse(q.target_date) - parse(today)) / 86400000); if (left > 0) { const need = Math.max(0, target - hrs); plan += ` 受検まで${left}日。残り${need.toFixed(0)}時間＝1日あたり約${(need / left * 60).toFixed(0)}分。`; } else plan += " 受検日を過ぎています。"; }
+        const st = q.area_status || {};
+        const areasHtml = (q.areas || []).map(a => `<div class="st-area"><span>${esc(a)}<small class="st-prog"> ${qualHours(q.name, a).toFixed(1)}h</small></span><span class="st-area-check">${st[a] && st[a].read ? "読了 ✓" : "読了 −"}　${st[a] && st[a].drill ? "問題演習 ✓" : "問題演習 −"}</span></div>`).join("");
+        return `<div class="st-qual"><div class="tk-h">${esc(q.name)}</div><div class="meal-hint">${plan}</div>${areasHtml}</div>`;
+      }).join("");
     }
 
     render(); load();
