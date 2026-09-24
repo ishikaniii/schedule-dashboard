@@ -36,6 +36,7 @@
     const $ = (id) => root.querySelector("#" + id);
 
     async function load() {
+      if (global.LifeStudyMigrate) await global.LifeStudyMigrate.migrateFP(sb);   // 旧FP設定の自動移行（初回のみ）
       const { data, error } = await sb.from("study_items").select("*").order("created_at", { ascending: false }).limit(300);
       items = error ? [] : (data || []).map(r => ({ ...r, done_steps: r.done_steps || [] }));
       await loadExtra();
