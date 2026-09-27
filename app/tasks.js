@@ -70,7 +70,9 @@
           const late = left < 0;
           const level = left <= 1 ? 0 : 1;
           const when = late ? `期限切れ（${e.date.slice(5)}）` : (left === 0 ? "今日締切" : (left === 1 ? "明日締切" : e.date.slice(5) + " 締切"));
-          items.push({ key, level, sort: e.date, label: `${title}：${STAGES[stage]}`, badge: when, kind: "課題", late });
+          // 課題の詳細ページURL（説明欄に入っている。2026-09-27、リンクとして表示するよう追加）。
+          const link = e.note && /^https?:\/\//.test(e.note) ? e.note : null;
+          items.push({ key, level, sort: e.date, label: `${title}：${STAGES[stage]}`, badge: when, kind: "課題", late, link, extLink: true });
         } else if (e.family_type === "personal" && title.startsWith("【タスク】")) {
           if (e.date > today || e.date < back7) continue;
           const key = "pl:" + (e.id || e.date + title);
@@ -109,7 +111,7 @@
       const must = items.filter(i => i.level === 0), rec = items.filter(i => i.level === 1);
       const row = (i) => `<li class="row tk-row${i.late ? " tk-late" : ""}" data-key="${esc(i.key)}">
         ${i.auto ? '<span class="tk-auto" title="自動で消えます">•</span>' : `<input type="checkbox" class="tk-chk" data-key="${esc(i.key)}" ${i.mine ? `data-id="${esc(i.id)}"` : ""} aria-label="完了">`}
-        <span class="desc">${i.link ? `<a href="${esc(i.link)}">${esc(i.label)}</a>` : esc(i.label)}</span>
+        <span class="desc">${i.link ? `<a href="${esc(i.link)}"${i.extLink ? ' target="_blank" rel="noopener"' : ""}>${esc(i.label)}</a>` : esc(i.label)}</span>
         <span class="tk-kind">${esc(i.kind)}</span><span class="tk-badge">${esc(i.badge)}</span>
         ${i.mine ? `<button class="del tk-del" data-id="${esc(i.id)}" aria-label="削除">×</button>` : ""}</li>`;
       root.innerHTML = `
