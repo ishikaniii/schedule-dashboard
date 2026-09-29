@@ -40,6 +40,10 @@
   .seg button{ flex:1; border:1px solid var(--border); background:var(--bg); color:var(--ink-dim); border-radius:8px; padding:8px; font-size:12.5px; cursor:pointer; }
   .seg button.active{ background:var(--accent); border-color:var(--accent); color:#fff; }
   #ib-preview{ max-width:100%; border-radius:9px; margin-top:8px; display:none; }
+  #ib-preview-list{ display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
+  #ib-preview-list .thumb{ position:relative; width:84px; height:84px; }
+  #ib-preview-list img{ width:100%; height:100%; object-fit:cover; border-radius:9px; }
+  #ib-preview-list button{ position:absolute; top:-6px; right:-6px; width:20px; height:20px; border-radius:50%; border:none; background:var(--strength); color:#fff; font-size:13px; line-height:20px; padding:0; cursor:pointer; }
   #gate{ position:fixed; inset:0; background:var(--bg); display:flex; align-items:center; justify-content:center; z-index:50; }
   #gate .box{ width:min(320px,90vw); text-align:center; }
   #gate input{ text-align:center; letter-spacing:.1em; }
@@ -105,9 +109,9 @@
       <label>題名（省略可）<input type="text" id="ib-title" maxlength="60" placeholder="例：第2章 ライフプラン"></label>
     </div>
     <label id="ib-text-wrap">自分の要点メモ<textarea id="ib-text" rows="6" maxlength="20000" placeholder="学んだことを、自分の言葉でまとめたメモを貼ってください"></textarea></label>
-    <label id="ib-photo-wrap" hidden>ノートの写真（iPadなどのカメラ・写真から選べます）
-      <input type="file" id="ib-photo" accept="image/*">
-      <img id="ib-preview">
+    <label id="ib-photo-wrap" hidden>ノートの写真（複数枚まとめて選べます。iPadなどのカメラ・写真から）
+      <input type="file" id="ib-photo" accept="image/*" multiple>
+      <div id="ib-preview-list"></div>
     </label>
     <label id="ib-caption-wrap" hidden>補足（省略可）<input type="text" id="ib-caption" maxlength="200" placeholder="例：今日の講義の後半だけ"></label>
     <button type="button" id="ib-send" class="primary">送る</button>
@@ -243,18 +247,28 @@
       $("ib-photo-wrap").hidden = ibMode !== "photo";
       $("ib-caption-wrap").hidden = ibMode !== "photo";
     }));
-    let photoB64 = null;
-    $("ib-photo").addEventListener("change", async () => {
-      const file = $("ib-photo").files[0]; photoB64 = null;
-      $("ib-preview").style.display = "none";
-      if (!file) return;
+    let photoList = [];   // [{dataUrl, b64}] 複数枚（2026-09-29対応。1枚のときも配列に統一）
+    async function fileToPhoto(file){
       const bmp = await createImageBitmap(file, { imageOrientation: "from-image" });
       const scale = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
       const c = document.createElement("canvas"); c.width = Math.round(bmp.width*scale); c.height = Math.round(bmp.height*scale);
       c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
       const dataUrl = c.toDataURL("image/jpeg", 0.88);
-      photoB64 = dataUrl.split(",")[1];
-      $("ib-preview").src = dataUrl; $("ib-preview").style.display = "block";
+      return { dataUrl, b64: dataUrl.split(",")[1] };
+    }
+    function renderPreviewList(){
+      $("ib-preview-list").innerHTML = photoList.map((p, i) => `<div class="thumb"><img src="${p.dataUrl}"><button type="button" data-i="${i}" aria-label="削除">×</button></div>`).join("");
+      $("ib-preview-list").querySelectorAll("button[data-i]").forEach(b => b.addEventListener("click", () => {
+        photoList.splice(parseInt(b.dataset.i, 10), 1); renderPreviewList();
+      }));
+    }
+    $("ib-photo").addEventListener("change", async () => {
+      const files = [...$("ib-photo").files];
+      $("ib-photo").value = "";   // 続けて選んだ分も追加できるよう、選択状態はすぐクリアする
+      if (!files.length) return;
+      const added = await Promise.all(files.map(fileToPhoto));
+      photoList = photoList.concat(added);
+      renderPreviewList();
     });
     sb.from("study_inbox").select("id",{count:"exact",head:true}).then(({error}) => {
       if (error) { $("ib-notice").innerHTML = '<div class="notice">まだ準備ができていません。Supabaseで schema.sql の「学習の受信箱」のSQLを実行してください。</div>'; $("ib-send").disabled = true; }
@@ -264,8 +278,10 @@
       if (!subject){ $("ib-ok").innerHTML = '<p class="hint" style="color:var(--strength);">科目を入れてください。</p>'; return; }
       let row;
       if (ibMode === "photo"){
-        if (!photoB64){ $("ib-ok").innerHTML = '<p class="hint" style="color:var(--strength);">ノートの写真を選んでください。</p>'; return; }
-        row = { subject, title: $("ib-title").value.trim() || null, text: $("ib-caption").value.trim(), image_b64: photoB64 };
+        if (!photoList.length){ $("ib-ok").innerHTML = '<p class="hint" style="color:var(--strength);">ノートの写真を選んでください。</p>'; return; }
+        row = { subject, title: $("ib-title").value.trim() || null, text: $("ib-caption").value.trim() };
+        if (photoList.length === 1) row.image_b64 = photoList[0].b64;
+        else row.image_b64_list = photoList.map(p => p.b64);
       } else {
         const text = $("ib-text").value.trim();
         if (text.length < 30){ $("ib-ok").innerHTML = '<p class="hint" style="color:var(--strength);">30文字以上のメモを入れてください。</p>'; return; }
@@ -276,7 +292,7 @@
       btn.disabled = false; btn.textContent = "送る";
       if (error){ $("ib-ok").innerHTML = `<p class="hint" style="color:var(--strength);">送信に失敗しました: ${esc(error.message)}</p>`; return; }
       $("ib-subject").value = ""; $("ib-title").value = ""; $("ib-text").value = ""; $("ib-caption").value = "";
-      $("ib-photo").value = ""; photoB64 = null; $("ib-preview").style.display = "none";
+      $("ib-photo").value = ""; photoList = []; renderPreviewList();
       $("ib-ok").innerHTML = '<p class="ok">送りました。学習タブの「ノート・教材」欄で、状況を確認できます。</p>';
     });
 
