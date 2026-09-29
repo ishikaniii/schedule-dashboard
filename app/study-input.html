@@ -145,12 +145,26 @@
   (function checkStoredAuth(){ let stored=null; try{ stored=localStorage.getItem(AUTH_STORAGE_KEY); }catch(e){} if (stored===PASSCODE_HASH_HEX) openApp(); })();
 
   function initApp(){
-    let quals = [], qualsMissing = false;
+    let quals = [], qualsMissing = false, pastSubjects = [];
 
+    // 科目の選択肢は、資格の登録名（＋分野）に加え、過去に記録・ノート化した科目名も出す
+    // （2026-09-29追加：講義の科目名など、資格以外の科目も候補に出るように）。
+    async function loadPastSubjects(){
+      const [it, en] = await Promise.all([
+        sb.from("study_items").select("subject").limit(2000),
+        sb.from("study_entries").select("subject").limit(2000),
+      ]);
+      const set = new Set();
+      (it.data || []).forEach(r => set.add(r.subject));
+      (en.data || []).forEach(r => set.add(r.subject));
+      pastSubjects = [...set].filter(Boolean).sort();
+      rebuildSubjectList();
+    }
     function rebuildSubjectList(){
-      const opts = ["経済学"];
-      quals.forEach(q => { opts.push(q.name); (q.areas||[]).forEach(a => opts.push(`${q.name}：${a}`)); });
-      $("st-subjects").innerHTML = opts.map(o => `<option>${esc(o)}</option>`).join("");
+      const opts = new Set(["経済学"]);
+      quals.forEach(q => { opts.add(q.name); (q.areas||[]).forEach(a => opts.add(`${q.name}：${a}`)); });
+      pastSubjects.forEach(s => opts.add(s));
+      $("st-subjects").innerHTML = [...opts].map(o => `<option>${esc(o)}</option>`).join("");
     }
 
     // ---------- 学習の時間を記録 ----------
@@ -296,7 +310,7 @@
       $("ib-ok").innerHTML = '<p class="ok">送りました。学習タブの「ノート・教材」欄で、状況を確認できます。</p>';
     });
 
-    loadList(); loadQuals();
+    loadList(); loadQuals(); loadPastSubjects();
   }
 })();
 </script>
