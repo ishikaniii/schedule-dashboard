@@ -32,6 +32,8 @@
   .center{ text-align:center; padding:30px 10px; } .big{ font-size:22px; font-weight:600; margin-bottom:8px; }
   .note{ border:1px solid var(--line); background:var(--card); border-radius:12px; padding:12px 14px; margin-bottom:10px; } .note summary{ cursor:pointer; font-weight:600; }
   .note p, .note li{ font-size:14.5px; } .note .sub{ font-size:12px; color:var(--dim); font-weight:400; }
+  .note .md h4{ font-size:14.5px; margin:14px 0 4px; color:var(--accent); } .note .md h4:first-child{ margin-top:0; }
+  .note .md p{ margin:6px 0; } .note .md ul{ margin:4px 0; padding-left:20px; } .note .md li{ margin:2px 0; }
   .subj{ display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; } .subj button{ border:1px solid var(--line); background:transparent; color:var(--dim); border-radius:99px; padding:4px 12px; font-size:12.5px; cursor:pointer; } .subj button.active{ background:var(--accent); color:#fff; border-color:var(--accent); }
   .setup{ background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; font-size:14px; }
   #gate{ position:fixed; inset:0; background:var(--bg); display:flex; align-items:center; justify-content:center; z-index:9; }
@@ -55,6 +57,25 @@
   const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   const $ = (id) => document.getElementById(id);
   const esc = (s) => (s == null ? "" : String(s)).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+  // Geminiが返すsummaryはMarkdown（見出し・太字・箇条書き）を含むため、そのまま<br>だけ挟むと
+  // 「### 」「**」などの記号が生の文字として見えて読みにくかった（2026-09-29、ユーザー指摘）。
+  // 外部ライブラリを使わず、見出し/太字/箇条書きだけの軽量変換で見た目を整える。
+  function mdLite(s){
+    const lines = esc(s).split("\n");
+    let html = "", inList = false;
+    const closeList = () => { if (inList) { html += "</ul>"; inList = false; } };
+    for (let line of lines) {
+      const h = line.match(/^(#{1,4})\s+(.*)/);
+      const li = line.match(/^[-*]\s+(.*)/);
+      if (h) { closeList(); html += `<h4>${h[2]}</h4>`; continue; }
+      if (li) { if (!inList) { html += "<ul>"; inList = true; } html += `<li>${li[1]}</li>`; continue; }
+      closeList();
+      if (line.trim() === "") { html += "<br>"; continue; }
+      html += `<p>${line}</p>`;
+    }
+    closeList();
+    return html.replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
+  }
   const pad = (n) => String(n).padStart(2, "0"), ymd = (d) => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
   const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
   const today = ymd(new Date());
@@ -154,7 +175,7 @@
     const rows = (data || []).filter(x => subj === "all" || x.subject === subj);
     view(`<div class="subj"><button data-s="all" class="${subj === "all" ? "active" : ""}">すべて</button>${subs.map(s => `<button data-s="${esc(s)}" class="${subj === s ? "active" : ""}">${esc(s)}</button>`).join("")}</div>` +
       (rows.map(e => `<details class="note"><summary>${esc(e.title)} <span class="sub">${esc(e.subject)}・${esc(e.date)}</span></summary>
-        <p>${esc(e.summary || "").replace(/\n/g, "<br>")}</p>${e.connection_note ? `<p class="sub">前回とのつながり：${esc(e.connection_note)}</p>` : ""}
+        <div class="md">${mdLite(e.summary || "")}</div>${e.connection_note ? `<p class="sub">前回とのつながり：${esc(e.connection_note)}</p>` : ""}
         ${(e.glossary || []).length ? `<details><summary class="sub">用語（${e.glossary.length}）</summary><ul>${e.glossary.map(g => `<li><b>${esc(g.term)}</b>：${esc(g.explanation)}</li>`).join("")}</ul></details>` : ""}</details>`).join("") || '<div class="setup">まだノートがありません。</div>'));
     $("view").querySelectorAll(".subj button").forEach(b => b.addEventListener("click", () => { subj = b.dataset.s; renderNotes(); }));
   }
